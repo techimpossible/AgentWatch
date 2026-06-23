@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  AgentWatch entitlements — draft for App Store submission.
+
+  These are NOT applied to the current build (see build.sh — neither the ad-hoc
+  nor the Developer ID `--release` path sandboxes the app). A future App Store
+  build would add the sandbox refactor, and the pipeline would:
+    1. Sign with a real Developer ID Application certificate from the
+       Apple Developer Program (~$99/year).
+    2. Apply this entitlements file: `codesign --entitlements AgentWatch.entitlements`
+    3. Notarize via `xcrun notarytool submit` and staple.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Required for App Store. Enables sandbox. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- Lets the user grant read-only access to ~/.claude/ via NSOpenPanel.
+         AgentWatch persists access across launches with a security-scoped bookmark. -->
+    <key>com.apple.security.files.user-selected.read-only</key>
+    <true/>
+
+    <!-- AppleScript automation targets for the "Resume in Terminal" and
+         "Bring terminal to front" features. Each target app must be enumerated;
+         users must additionally grant permission per app on first use. -->
+    <key>com.apple.security.scripting-targets</key>
+    <dict>
+        <key>com.apple.Terminal</key>
+        <array>
+            <string>com.apple.terminal.shell-script</string>
+        </array>
+        <key>com.googlecode.iterm2</key>
+        <array>
+            <string>com.googlecode.iterm2.shell-script</string>
+        </array>
+    </dict>
+
+    <!-- NOT requested:
+         - com.apple.security.network.client / .server:
+             AgentWatch performs ZERO network I/O. Granting this would weaken
+             the security posture for no functional benefit.
+         - com.apple.security.files.user-selected.read-write:
+             AgentWatch is strictly read-only against Claude Code data.
+         - com.apple.security.cs.allow-jit / allow-unsigned-executable-memory /
+           allow-dyld-environment-variables:
+             We don't embed WebKit/JavaScriptCore. Hardened runtime stays clean.
+    -->
+</dict>
+</plist>

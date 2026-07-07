@@ -92,6 +92,7 @@ struct MenuBarContent: View {
                 }
                 .buttonStyle(.neonCyan)
                 .help("History")
+                .accessibilityLabel("History")
                 Button {
                     NSApp.setActivationPolicy(.regular)
                     NSApp.activate(ignoringOtherApps: true)
@@ -102,6 +103,7 @@ struct MenuBarContent: View {
                 }
                 .buttonStyle(.neonMagenta)
                 .help("Search")
+                .accessibilityLabel("Search")
                 Button {
                     NSApp.setActivationPolicy(.regular)
                     NSApp.activate(ignoringOtherApps: true)
@@ -112,6 +114,7 @@ struct MenuBarContent: View {
                 }
                 .buttonStyle(.neonGold)
                 .help("Costs")
+                .accessibilityLabel("Costs")
             }
             .padding(.horizontal, 12)
             .padding(.top, 6)
@@ -193,6 +196,7 @@ struct MenuBarContent: View {
                 Spacer()
                 Button("REFRESH") { Task { await state.refresh() } }
                     .buttonStyle(.neonCyan)
+                    .keyboardShortcut("r")
                 Button("QUIT") { NSApp.terminate(nil) }
                     .buttonStyle(.neonMagenta)
                     .keyboardShortcut("q")
@@ -235,6 +239,8 @@ private struct SessionRow: View {
                     .lineLimit(1)
             }
             Spacer()
+            // StarButton and CopyButton already provide their own
+            // .accessibilityLabel internally, so none is added here.
             StarButton(sessionId: session.id)
             CopyButton(
                 text: TerminalLauncher.resumeCommand(profile: session.profile, sessionId: session.id, cwd: session.cwd),
@@ -254,6 +260,7 @@ private struct SessionRow: View {
             }
             .buttonStyle(.neonCyan)
             .help("Open a new Terminal and run: claude --resume \(session.id)")
+            .accessibilityLabel("Resume session in new Terminal")
             Button {
                 TerminalLauncher.bringToFront(pid: session.pid, fallbackCwd: session.cwd)
             } label: {
@@ -262,6 +269,7 @@ private struct SessionRow: View {
             }
             .buttonStyle(.neonCyan)
             .help("Bring this session's terminal to front")
+            .accessibilityLabel("Bring terminal to front")
             Button {
                 confirmingKill = true
             } label: {
@@ -271,6 +279,9 @@ private struct SessionRow: View {
             }
             .buttonStyle(.plain)
             .help("Kill this session (terminate PID \(session.pid))")
+            // Spell out the destructive nature in the label since AppKit exposes
+            // no dedicated "destructive" accessibility trait for a plain button.
+            .accessibilityLabel("Kill session (destructive)")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

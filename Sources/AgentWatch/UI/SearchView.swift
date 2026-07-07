@@ -5,21 +5,26 @@ struct SearchView: View {
     @State private var hits: [SearchHit] = []
     @State private var loading = false
     @State private var lastQuery = ""
+    @State private var capReached = false
+    @State private var searchLimit = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(Theme.neonMagenta)
+                    .accessibilityHidden(true)
                 TextField("SEARCH INSIDE MESSAGES…", text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
                     .onSubmit { run() }
+                    .accessibilityLabel("Search inside messages")
                 if !query.isEmpty {
-                    Button { query = ""; hits = []; lastQuery = "" } label: {
+                    Button { query = ""; hits = []; lastQuery = ""; capReached = false } label: {
                         Image(systemName: "xmark.circle.fill")
                     }
                     .buttonStyle(.neonMagenta)
+                    .accessibilityLabel("Clear search")
                 }
                 Button("SEARCH") { run() }
                     .buttonStyle(.neonMagenta)
@@ -53,6 +58,15 @@ struct SearchView: View {
                     HitRow(hit: hit, query: lastQuery)
                 }
                 .listStyle(.inset)
+                // Only shown when scanning stopped early at the cap — never on complete results.
+                if capReached {
+                    Text("Showing first \(searchLimit) matches — refine your search")
+                        .font(Theme.chromeCaption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                        .accessibilityLabel("Showing only the first \(searchLimit) matches. Refine your search to narrow results.")
+                }
             }
         }
         .frame(minWidth: 760, minHeight: 540)
@@ -65,9 +79,11 @@ struct SearchView: View {
         loading = true
         lastQuery = q
         Task.detached(priority: .userInitiated) {
-            let results = SearchEngine.search(query: q)
+            let result = SearchEngine.search(query: q)
             await MainActor.run {
-                hits = results
+                hits = result.hits
+                capReached = result.capReached
+                searchLimit = result.limit
                 loading = false
             }
         }
@@ -106,6 +122,21 @@ private struct HitRow: View {
             }
         }
         .padding(.vertical, 4)
+        // Combine the descriptive text into one VoiceOver element; action buttons stay
+        // individually focusable via .accessibilityElement(children: .contain).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(rowLabel)
+    }
+
+    /// One-line summary of the match for VoiceOver, read before the action buttons.
+    private var rowLabel: String {
+        var parts = ["\(hit.role) message in \(hit.projectName), profile \(hit.profile)"]
+        if let ts = hit.timestamp {
+            parts.append(ts.formatted(date: .numeric, time: .shortened))
+        }
+        parts.append("line \(hit.lineNumber)")
+        parts.append(hit.preview)
+        return parts.joined(separator: ", ")
     }
 
     private var actions: some View {
@@ -119,23 +150,28 @@ private struct HitRow: View {
             }
             .help("Open transcript")
             .buttonStyle(.neonMagenta)
+            .accessibilityLabel("Open transcript")
+            .accessibilityHint("Opens the full session transcript in a new window")
 
             CopyButton(
                 text: hit.sessionId,
                 help: "Copy session ID",
                 icon: "number"
             )
+            .accessibilityLabel("Copy session ID")
             if let cwd = hit.cwd {
                 CopyButton(
                     text: TerminalLauncher.resumeCommand(profile: hit.profile, sessionId: hit.sessionId, cwd: cwd),
                     help: "Copy resume command",
                     icon: "terminal"
                 )
+                .accessibilityLabel("Copy resume command")
                 CopyButton(
                     text: TerminalLauncher.resumeURL(profile: hit.profile, sessionId: hit.sessionId, cwd: cwd),
                     help: "Copy AgentWatch link (click to resume in terminal)",
                     icon: "link"
                 )
+                .accessibilityLabel("Copy AgentWatch resume link")
             }
         }
     }

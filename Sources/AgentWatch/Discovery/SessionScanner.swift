@@ -36,10 +36,46 @@ enum SessionScanner {
         }
     }
 
+    /// Snapshot every process once per scan (pid -> command line) instead of
+    /// spawning `/bin/ps` once per session file. Presence of a pid in the map
+    /// means the process is alive; the command string lets us replicate the same
+    /// "command references claude" check ProcessChecker.isClaudeSession performs.
+    private static func processCommandMap() -> [Int32: String] {
+        let p = Process()
+        p.launchPath = "/bin/ps"
+        // -A: all processes; pid= command= : bare columns (no header).
+        p.arguments = ["-Axo", "pid=,command="]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = Pipe()
+        do { try p.run() } catch { return [:] }
+        // Read before waiting to avoid deadlock on large output filling the pipe.
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0,
+              let text = String(data: data, encoding: .utf8) else { return [:] }
+
+        var map: [Int32: String] = [:]
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            // Each line is "<pid> <command…>"; split off the leading pid column.
+            let trimmed = line.drop(while: { $0 == " " })
+            guard let space = trimmed.firstIndex(of: " ") else { continue }
+            guard let pid = Int32(trimmed[..<space]) else { continue }
+            let command = trimmed[trimmed.index(after: space)...]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            map[pid] = command
+        }
+        return map
+    }
+
     static func scan() -> [Session] {
         let fm = FileManager.default
         let decoder = JSONDecoder()
         var sessions: [Session] = []
+
+        // Single ps enumeration for this scan; pids are looked up in this map
+        // rather than spawning ps per session file.
+        let processMap = processCommandMap()
 
         for (profile, dir) in ClaudeHome.sessionDirs {
             DebugLog.write("scan: profile=\(profile) dir=\(dir.path)")
@@ -59,7 +95,9 @@ enum SessionScanner {
                     continue
                 }
 
-                let isClaude = ProcessChecker.isClaudeSession(pid: file.pid)
+                // Same semantics as ProcessChecker.isClaudeSession: alive (present
+                // in the snapshot) AND command line references "claude".
+                let isClaude = (processMap[file.pid]?.lowercased().contains("claude")) ?? false
                 guard isClaude else {
                     DebugLog.write("scan: \(url.lastPathComponent) pid=\(file.pid) skipped (not a claude process)")
                     continue

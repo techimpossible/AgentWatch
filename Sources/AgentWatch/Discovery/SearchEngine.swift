@@ -13,15 +13,23 @@ struct SearchHit: Identifiable, Hashable {
     let fileURL: URL
 }
 
+/// Outcome of a search: the hits plus whether the result set was truncated at `limit`.
+struct SearchResult {
+    let hits: [SearchHit]
+    let limit: Int          // the cap that was applied
+    let capReached: Bool    // true when scanning stopped early because `limit` was hit
+}
+
 enum SearchEngine {
     /// Plain substring search across all JSONL files under ~/.claude/projects/.
-    /// Case-insensitive. Returns up to `limit` hits.
-    static func search(query: String, limit: Int = 200) -> [SearchHit] {
+    /// Case-insensitive. Returns up to `limit` hits, flagging when the cap was reached.
+    static func search(query: String, limit: Int = 200) -> SearchResult {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard q.count >= 2 else { return [] }
+        guard q.count >= 2 else { return SearchResult(hits: [], limit: limit, capReached: false) }
 
         DebugLog.write("search: query='\(q)' limit=\(limit)")
         var hits: [SearchHit] = []
+        var capReached = false
         let fm = FileManager.default
 
         outer: for (profile, projectDir) in ClaudeHome.projectDirs() {
@@ -56,12 +64,12 @@ enum SearchEngine {
                         timestamp: parsed.timestamp,
                         fileURL: file
                     ))
-                    if hits.count >= limit { break outer }
+                    if hits.count >= limit { capReached = true; break outer }
                 }
             }
         }
 
-        DebugLog.write("search: \(hits.count) hits")
+        DebugLog.write("search: \(hits.count) hits capReached=\(capReached)")
         // Sort by timestamp desc, nil last
         hits.sort { (a, b) in
             switch (a.timestamp, b.timestamp) {
@@ -71,7 +79,7 @@ enum SearchEngine {
             default: return a.id < b.id
             }
         }
-        return hits
+        return SearchResult(hits: hits, limit: limit, capReached: capReached)
     }
 
     private static func parseLineMeta(_ line: String) -> (role: String, timestamp: Date?) {

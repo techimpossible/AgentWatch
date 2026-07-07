@@ -132,7 +132,11 @@ enum ProjectName {
 /// (e.g., `AGENTWATCH_DEBUG=1 open AgentWatch.app`). Off by default to keep the
 /// auditability posture clean — no persistent on-disk artifacts during normal use.
 enum DebugLog {
-    static let url = URL(fileURLWithPath: "/tmp/agentwatch.log")
+    /// ~/Library/Logs/AgentWatch/agentwatch.log — per-user, not world-readable
+    /// like the old /tmp path. Created owner-only (0600) since lines can carry
+    /// cwds/URLs/paths.
+    static let url = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Logs/AgentWatch/agentwatch.log", isDirectory: false)
     static let enabled = ProcessInfo.processInfo.environment["AGENTWATCH_DEBUG"] != nil
 
     static func write(_ msg: String) {
@@ -144,7 +148,11 @@ enum DebugLog {
                 try? h.write(contentsOf: data)
                 try? h.close()
             } else {
-                try? data.write(to: url)
+                // First write: ensure the directory exists, then create the file
+                // with owner-only permissions so paths never leak to other users.
+                let fm = FileManager.default
+                try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                fm.createFile(atPath: url.path, contents: data, attributes: [.posixPermissions: 0o600])
             }
         }
     }

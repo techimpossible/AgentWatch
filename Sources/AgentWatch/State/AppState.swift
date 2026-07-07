@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import OSLog
@@ -20,15 +21,35 @@ final class AppState {
         start()
     }
 
+    // Adaptive polling cadence: fast while there's active work (or the app is
+    // frontmost), slow when everything is idle — saves battery without changing
+    // what data is shown.
+    private static let activeInterval: Duration = .seconds(3)
+    private static let idleInterval: Duration = .seconds(10)
+
     func start() {
         guard pollingTask == nil else { return }
-        DebugLog.write("starting polling loop (3s)")
+        DebugLog.write("starting polling loop (adaptive 3s/10s)")
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-                try? await Task.sleep(for: .seconds(3))
+                // Pick the next delay from the state produced by refresh().
+                let interval = self?.pollInterval() ?? AppState.activeInterval
+                try? await Task.sleep(for: interval)
             }
         }
+    }
+
+    /// Fast interval when any session is working/needs-input or the app is
+    /// active; otherwise back off to the idle interval.
+    private func pollInterval() -> Duration {
+        let hasActiveSession = sessions.contains {
+            $0.status == .working || $0.status == .needsInput
+        }
+        if hasActiveSession || NSApp.isActive {
+            return AppState.activeInterval
+        }
+        return AppState.idleInterval
     }
 
     func stop() {

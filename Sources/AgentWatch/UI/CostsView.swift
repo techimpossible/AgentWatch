@@ -5,14 +5,31 @@ struct CostsView: View {
     @State private var loading = false
     @State private var tab: Tab = .profile
 
+    @State private var range: DateRange = .all
+
     enum Tab: String, CaseIterable, Identifiable {
         case profile = "By profile", project = "By project", day = "By day", model = "By model"
         var id: String { rawValue }
     }
 
+    enum DateRange: String, CaseIterable, Identifiable {
+        case week = "7 days", month = "30 days", all = "All"
+        var id: String { rawValue }
+        /// Start of the window, or nil for "All" (no lower bound).
+        var since: Date? {
+            switch self {
+            case .week:  return Calendar.current.date(byAdding: .day, value: -7, to: Date())
+            case .month: return Calendar.current.date(byAdding: .day, value: -30, to: Date())
+            case .all:   return nil
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            Divider()
+            rangePicker
             Divider()
             if loading {
                 ProgressView("Computing…")
@@ -65,6 +82,26 @@ struct CostsView: View {
             .disabled(loading)
         }
         .padding(16)
+    }
+
+    private var rangePicker: some View {
+        HStack(spacing: 10) {
+            Text("RANGE")
+                .font(Theme.chromeCaption)
+                .tracking(1.2)
+                .foregroundStyle(.tertiary)
+            Picker("Cost date range", selection: $range) {
+                ForEach(DateRange.allCases) { r in Text(r.rawValue).tag(r) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 260)
+            .accessibilityLabel("Cost date range")
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .onChange(of: range) { _, _ in reload() }
     }
 
     private func summary(_ a: CostAggregate) -> some View {
@@ -153,8 +190,9 @@ struct CostsView: View {
 
     private func reload() {
         loading = true
+        let since = range.since
         Task.detached(priority: .userInitiated) {
-            let computed = CostCalculator.computeAll()
+            let computed = CostCalculator.computeAll(since: since)
             await MainActor.run {
                 agg = computed
                 loading = false

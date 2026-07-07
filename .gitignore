@@ -18,3 +18,7 @@ AgentWatch*.app/
 
 # Local Claude Code state (worktrees, settings, session data)
 .claude/
+
+# Python cache (tools/)
+__pycache__/
+*.pyc

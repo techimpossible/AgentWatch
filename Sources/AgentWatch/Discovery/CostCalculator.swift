@@ -11,7 +11,9 @@ enum CostCalculator {
 
     /// Walk every JSONL in ~/.claude/projects/ and aggregate cost.
     /// Pure function over disk; safe to call from a background actor.
-    static func computeAll() -> CostAggregate {
+    /// When `since` is non-nil, only assistant turns timestamped on or after
+    /// that date are counted; entries without a parseable timestamp are dropped.
+    static func computeAll(since: Date? = nil) -> CostAggregate {
         DebugLog.write("cost: computeAll start")
         let fm = FileManager.default
         var agg = CostAggregate()
@@ -23,7 +25,7 @@ enum CostCalculator {
             // Derive the real folder name from the first file carrying a cwd.
             let projectName = projectName(forFiles: jsonlFiles, fallback: fallbackName)
             for file in jsonlFiles {
-                attribute(fileURL: file, profile: profile, projectName: projectName, into: &agg)
+                attribute(fileURL: file, profile: profile, projectName: projectName, since: since, into: &agg)
             }
         }
 
@@ -32,7 +34,7 @@ enum CostCalculator {
         return agg
     }
 
-    private static func attribute(fileURL: URL, profile: String, projectName: String, into agg: inout CostAggregate) {
+    private static func attribute(fileURL: URL, profile: String, projectName: String, since: Date?, into agg: inout CostAggregate) {
         guard let data = try? Data(contentsOf: fileURL),
               let text = String(data: data, encoding: .utf8) else { return }
 
@@ -60,8 +62,12 @@ enum CostCalculator {
 
             let day: String
             if let ts = obj["timestamp"] as? String, let parsed = parseTimestamp(ts) {
+                // When a `since` bound is set, skip turns before it.
+                if let since = since, parsed < since { continue }
                 day = dayFormatter.string(from: parsed)
             } else {
+                // No parseable timestamp: drop when filtering by date.
+                if since != nil { continue }
                 day = "unknown"
             }
 

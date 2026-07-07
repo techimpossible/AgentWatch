@@ -30,5 +30,7 @@ struct CopyButton: View {
         .buttonStyle(.plain)
         .disabled(text.isEmpty)
         .help(text.isEmpty ? "Nothing to copy" : help)
+        .accessibilityLabel(text.isEmpty ? "Nothing to copy" : help)
+        .accessibilityValue(copied ? "Copied" : "")
     }
 }

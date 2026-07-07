@@ -184,6 +184,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     // MARK: - Observe AppState to refresh the icon
 
     private func observeState(_ state: AppState) {
+        // Lightweight in-memory change detector: it only reads already-scanned
+        // session state (no ps/file I/O), so its 1s cadence stays independent of
+        // AppState's adaptive polling and keeps the icon responsive when state
+        // changes between scans.
         observationCancellable?.cancel()
         observationCancellable = Task { @MainActor [weak self] in
             var lastCount = -1

@@ -20,5 +20,7 @@ struct StarButton: View {
         }
         .buttonStyle(.plain)
         .help(isStarred ? "Unstar this session" : "Star this session")
+        .accessibilityLabel("Favourite")
+        .accessibilityValue(isStarred ? "Starred" : "Not starred")
     }
 }

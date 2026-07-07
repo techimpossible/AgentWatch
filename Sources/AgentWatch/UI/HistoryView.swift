@@ -28,6 +28,8 @@ struct HistoryView: View {
                 }
                 .buttonStyle(.neonGold)
                 .help(favoritesOnly ? "Show all sessions" : "Show favourites only")
+                .accessibilityLabel("Favourites only")
+                .accessibilityValue(favoritesOnly ? "On" : "Off")
                 TextField("FILTER SESSIONS…", text: $filter)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
@@ -175,6 +177,7 @@ private struct HistoryRow: View {
                 }
                 .help("Open Terminal and run: claude --resume \(session.sessionId)")
                 .buttonStyle(.neonCyan)
+                .accessibilityLabel("Resume in Terminal")
 
                 CopyButton(
                     text: TerminalLauncher.resumeCommand(profile: session.profile, sessionId: session.sessionId, cwd: cwd),
@@ -194,6 +197,7 @@ private struct HistoryRow: View {
                 }
                 .help("Reveal \(cwd) in Finder")
                 .buttonStyle(.neonCyan)
+                .accessibilityLabel("Reveal in Finder")
             }
 
             Button {
@@ -205,6 +209,7 @@ private struct HistoryRow: View {
             }
             .help("Open transcript")
             .buttonStyle(.neonMagenta)
+            .accessibilityLabel("Open transcript")
         }
     }
 }

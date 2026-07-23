@@ -82,7 +82,7 @@ struct HistoryView: View {
                         ForEach(groupedSessions, id: \.profile) { group in
                             Section {
                                 ForEach(group.sessions) { session in
-                                    HistoryRow(session: session)
+                                    HistoryRow(session: session, live: liveById[session.sessionId])
                                         .listRowInsets(EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14))
                                         .listRowSeparatorTint(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
                                 }
@@ -92,7 +92,7 @@ struct HistoryView: View {
                         }
                     } else {
                         ForEach(filteredSessions) { session in
-                            HistoryRow(session: session)
+                            HistoryRow(session: session, live: liveById[session.sessionId])
                                 .listRowInsets(EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14))
                                 .listRowSeparatorTint(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
                         }
@@ -107,6 +107,14 @@ struct HistoryView: View {
         .onAppear { if sessions.isEmpty { reload() } }
     }
 
+    /// Currently-running sessions keyed by id, so History can flag live sessions
+    /// and offer "go to active" instead of relaunching. Reads the live scan, so
+    /// the list reacts as sessions start/stop.
+    private var liveById: [String: Session] {
+        Dictionary(AppState.shared.sessions.map { ($0.sessionId, $0) },
+                   uniquingKeysWith: { a, _ in a })
+    }
+
     private var filteredSessions: [HistoricalSession] {
         var result = sessions
         if favoritesOnly {
@@ -114,11 +122,20 @@ struct HistoryView: View {
         }
         let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
         if !q.isEmpty {
+            let live = liveById
             result = result.filter {
                 $0.projectName.lowercased().contains(q)
                     || $0.firstMessage?.lowercased().contains(q) == true
                     || $0.sessionId.lowercased().contains(q)
+                    || live[$0.sessionId]?.displayTitle.lowercased().contains(q) == true
             }
+        }
+        // Surface running sessions first (then keep recency order).
+        let live = liveById
+        result.sort { a, b in
+            let la = live[a.sessionId] != nil, lb = live[b.sessionId] != nil
+            if la != lb { return la }
+            return a.lastModified > b.lastModified
         }
         return result
     }
@@ -157,24 +174,43 @@ private struct HistoryRow: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var scheme
     let session: HistoricalSession
+    /// The matching currently-running session, if this one is live.
+    var live: Session? = nil
+
+    private var isLive: Bool { live != nil }
+    /// Row identity: prefer the live session's title (picks up `claude --name`),
+    /// else the first prompt / project folder.
+    private var title: String { live?.displayTitle ?? session.displayName }
+    /// Show the prompt preview only when it isn't already the title.
+    private var showPreview: Bool {
+        guard let m = session.firstMessage, !m.isEmpty else { return false }
+        return m != title
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Profile identity spine
+            // Identity spine — status color when live, else the profile color.
             RoundedRectangle(cornerRadius: 1, style: .continuous)
-                .fill(Theme.profileColor(session.profile))
+                .fill(isLive ? Theme.statusColor(live!.status) : Theme.profileColor(session.profile))
                 .frame(width: 2)
                 .padding(.vertical, 2)
                 .opacity(0.9)
 
             VStack(alignment: .leading, spacing: 6) {
-                // Title + timestamp column (timestamp stays pinned right; title flexes).
+                // Session name + optional LIVE flag + timestamp (pinned right).
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(session.projectName)
+                    Text(title)
                         .font(Theme.rowTitle)
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    if isLive {
+                        Text("LIVE")
+                            .font(Theme.eyebrowTiny)
+                            .tracking(1.2)
+                            .foregroundStyle(Theme.accent)
+                            .layoutPriority(1)
+                    }
                     Spacer(minLength: 8)
                     Text(session.lastModified.formatted(date: .abbreviated, time: .shortened))
                         .font(Theme.mono)
@@ -184,8 +220,24 @@ private struct HistoryRow: View {
                         .frame(minWidth: 130, alignment: .trailing)
                 }
 
-                if let preview = session.firstMessage {
-                    Text(preview)
+                // Context: which project / cwd it ran in (the title is now the name).
+                HStack(spacing: 6) {
+                    Text(session.projectName)
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if let rc = session.relativeCwd, rc != session.projectName {
+                        Text(rc)
+                            .font(Theme.mono)
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+
+                if showPreview {
+                    Text(session.firstMessage ?? "")
                         .font(Theme.prose)
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(2)
@@ -218,7 +270,18 @@ private struct HistoryRow: View {
                 text: session.firstMessage ?? "",
                 help: "Copy first prompt"
             )
-            if let cwd = session.cwd {
+
+            if let live {
+                // Running → jump to the live terminal instead of relaunching it.
+                Button {
+                    TerminalLauncher.bringToFront(pid: live.pid, fallbackCwd: live.cwd)
+                } label: {
+                    Image(systemName: "arrow.up.right.square")
+                }
+                .help("Go to the running session (PID \(live.pid))")
+                .buttonStyle(.neonGold)
+                .accessibilityLabel("Go to active session")
+            } else if let cwd = session.cwd {
                 Button {
                     TerminalLauncher.resumeSession(profile: session.profile, sessionId: session.sessionId, cwd: cwd)
                 } label: {
@@ -227,7 +290,9 @@ private struct HistoryRow: View {
                 .help("Open Terminal and run: claude --resume \(session.sessionId)")
                 .buttonStyle(.secondary)
                 .accessibilityLabel("Resume in Terminal")
+            }
 
+            if let cwd = session.cwd {
                 CopyButton(
                     text: TerminalLauncher.resumeCommand(profile: session.profile, sessionId: session.sessionId, cwd: cwd),
                     help: "Copy resume command",

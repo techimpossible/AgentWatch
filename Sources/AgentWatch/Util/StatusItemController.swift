@@ -339,17 +339,19 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
 
     private func refreshIcon(state: AppState) {
         guard let button = statusItem.button else { return }
+        // Warm Glass status palette: coral = "your turn", blue = working,
+        // mid gray = everything else. Coral appears only for needs-input.
         let symbol: String
         let color: NSColor
         if state.sessions.contains(where: { $0.status == .needsInput }) {
             symbol = "exclamationmark.circle.fill"
-            color = NSColor(Theme.dpGold)
+            color = NSColor(Theme.accent)            // coral — the one attention color
         } else if state.sessions.contains(where: { $0.status == .working }) {
             symbol = "circle.fill"
-            color = NSColor(Theme.neonCyan)
+            color = NSColor(Theme.accentBlue)        // calm blue — working
         } else {
             symbol = "circle.dotted"
-            color = NSColor.secondaryLabelColor
+            color = NSColor(Theme.idle)              // mid gray — idle, recedes
         }
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "AgentWatch")
         let config = NSImage.SymbolConfiguration(paletteColors: [color])

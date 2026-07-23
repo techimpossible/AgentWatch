@@ -15,8 +15,8 @@ enum MascotReason {
 
     var tint: Color {
         switch self {
-        case .needsInput: return Theme.dpGold
-        case .finished:   return Theme.neonCyan
+        case .needsInput: return Theme.accent       // coral — "your turn"
+        case .finished:   return Theme.accentGreen   // green — done
         }
     }
 }
@@ -194,7 +194,7 @@ struct MascotView: View {
         Image(nsImage: img).resizable().scaledToFit()
             .frame(width: imageSize, height: imageSize)
             .rotationEffect(.degrees(stride ? 3 : -3), anchor: .bottom)
-            .shadow(color: reason.tint.opacity(0.35), radius: 12)
+            .shadow(color: reason.tint.opacity(0.30), radius: 12)
     }
 
     /// Boxy robot: square eyes, a straight mouth, and a little antenna.
@@ -221,7 +221,7 @@ struct MascotView: View {
             .offset(y: -7)
         }
         .shadow(color: bodyColor.opacity(0.5), radius: 8)
-        .shadow(color: reason.tint.opacity(0.35), radius: 14)
+        .shadow(color: reason.tint.opacity(0.30), radius: 12)
     }
 
     /// Rounded blob with two big eyes.
@@ -234,7 +234,7 @@ struct MascotView: View {
         }
         .frame(width: bodyW, height: bodyH)
         .shadow(color: bodyColor.opacity(0.5), radius: 8)
-        .shadow(color: reason.tint.opacity(0.35), radius: 14)
+        .shadow(color: reason.tint.opacity(0.30), radius: 12)
     }
 
     /// Small profile pill for image personas (whose art may include a bubble).
@@ -242,13 +242,14 @@ struct MascotView: View {
         Text(profile.uppercased())
             .font(.system(size: 10, weight: .heavy, design: .monospaced))
             .tracking(0.5)
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.profileColor(profile))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(
-                Capsule().fill(Color.black.opacity(0.8))
-                    .overlay(Capsule().strokeBorder(Theme.profileColor(profile).opacity(0.8), lineWidth: 1))
+                Capsule().fill(Theme.surfaceRaised)
+                    .overlay(Capsule().strokeBorder(Theme.profileColor(profile).opacity(0.65), lineWidth: 1))
             )
+            .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
             .fixedSize()
     }
 
@@ -289,7 +290,7 @@ struct MascotView: View {
         }
         .frame(width: bodyW, height: bodyH)
         .shadow(color: bodyColor.opacity(0.55), radius: 8)
-        .shadow(color: reason.tint.opacity(0.40), radius: 14)
+        .shadow(color: reason.tint.opacity(0.30), radius: 12)
     }
 
     /// A few faint pores to suggest a sponge texture.
@@ -372,15 +373,16 @@ struct MascotView: View {
                 .foregroundStyle(Theme.profileColor(profile))
             Text(reason.message)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.textPrimary)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(
             Capsule()
-                .fill(Color.black.opacity(0.80))
-                .overlay(Capsule().strokeBorder(Theme.profileColor(profile).opacity(0.8), lineWidth: 1.2))
+                .fill(Theme.surfaceRaised)
+                .overlay(Capsule().strokeBorder(Theme.profileColor(profile).opacity(0.65), lineWidth: 1.2))
         )
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
         .fixedSize()
     }
 

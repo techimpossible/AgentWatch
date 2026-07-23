@@ -7,6 +7,8 @@ struct CostsView: View {
 
     @State private var range: DateRange = .all
 
+    @Environment(\.colorScheme) private var scheme
+
     enum Tab: String, CaseIterable, Identifiable {
         case profile = "By profile", project = "By project", day = "By day", model = "By model"
         var id: String { rawValue }
@@ -28,20 +30,24 @@ struct CostsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider()
+            hairlineDivider
             rangePicker
-            Divider()
+            hairlineDivider
             if loading {
                 ProgressView("Computing…")
+                    .font(Theme.prose)
+                    .tint(Theme.accentBlue)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let agg {
                 summary(agg)
-                Divider()
+                hairlineDivider
                 Picker("", selection: $tab) {
                     ForEach(Tab.allCases) { t in Text(t.rawValue).tag(t) }
                 }
                 .pickerStyle(.segmented)
-                .padding(8)
+                .tint(Theme.accentBlue)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
 
                 ScrollView {
                     switch tab {
@@ -60,16 +66,23 @@ struct CostsView: View {
         .onAppear { reload() }
     }
 
+    /// A quiet hairline separator (spec §7.1).
+    private var hairlineDivider: some View {
+        Rectangle()
+            .fill(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
+            .frame(height: 0.5)
+    }
+
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("COSTS")
-                    .font(Theme.chromeTitle)
-                    .tracking(3.0)
-                    .foregroundStyle(Theme.dpGold)
+                    .font(Theme.titleWindow)
+                    .tracking(0.5)
+                    .foregroundStyle(Theme.textPrimary)
                 Text("Anthropic published rates as of \(Pricing.asOf) · proxy/gateway billing may differ")
-                    .font(Theme.chromeCaption)
-                    .foregroundStyle(.tertiary)
+                    .font(Theme.prose)
+                    .foregroundStyle(Theme.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
@@ -78,65 +91,83 @@ struct CostsView: View {
             } label: {
                 Label("REFRESH", systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.neonGold)
+            .buttonStyle(.secondary)
             .disabled(loading)
         }
-        .padding(16)
+        .padding(20)
     }
 
     private var rangePicker: some View {
         HStack(spacing: 10) {
             Text("RANGE")
-                .font(Theme.chromeCaption)
+                .font(Theme.eyebrow)
                 .tracking(1.2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Theme.textSecondary)
             Picker("Cost date range", selection: $range) {
                 ForEach(DateRange.allCases) { r in Text(r.rawValue).tag(r) }
             }
             .pickerStyle(.segmented)
+            .tint(Theme.accentBlue)
             .labelsHidden()
             .frame(maxWidth: 260)
             .accessibilityLabel("Cost date range")
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .onChange(of: range) { _, _ in reload() }
     }
 
     private func summary(_ a: CostAggregate) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 12) {
+            // Grand total — a spend figure is information, not "your turn": no coral, no glow.
             Text(formatUSD(a.totalCost))
                 .font(Theme.displayLarge)
-                .foregroundStyle(Theme.dpGold)
-                .shadow(color: Theme.dpGold.opacity(0.5), radius: 8)
-            HStack(spacing: 14) {
-                metric("INPUT", value: formatTokens(a.totalInputTokens), tint: Theme.neonCyan)
-                metric("OUTPUT", value: formatTokens(a.totalOutputTokens), tint: Theme.neonMagenta)
-                metric("CACHE READ", value: formatTokens(a.totalCacheRead), tint: Theme.dpChrome)
-                metric("CACHE WRITE", value: formatTokens(a.totalCacheWrite), tint: Theme.dpChrome)
+                .foregroundStyle(Theme.textPrimary)
+            HStack(spacing: 8) {
+                metric("INPUT", value: formatTokens(a.totalInputTokens), tint: Theme.accentBlue)
+                metric("OUTPUT", value: formatTokens(a.totalOutputTokens), tint: Theme.accentGreen)
+                metric("CACHE READ", value: formatTokens(a.totalCacheRead), tint: Theme.idle)
+                metric("CACHE WRITE", value: formatTokens(a.totalCacheWrite), tint: Theme.idle)
             }
             Text("\(a.entriesCounted) ASSISTANT TURNS COUNTED")
-                .font(Theme.chromeCaption)
+                .font(Theme.eyebrow)
                 .tracking(1.2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Theme.textTertiary)
         }
-        .padding(16)
+        .padding(20)
     }
 
     private func metric(_ label: String, value: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(Theme.chromeCaption)
+                .font(Theme.eyebrow)
                 .tracking(1.2)
-                .foregroundStyle(tint.opacity(0.85))
+                .foregroundStyle(Theme.textSecondary)
             Text(value)
                 .font(.system(.callout, design: .monospaced).weight(.semibold))
-                .foregroundStyle(.primary)
+                .monospacedDigit()
+                .foregroundStyle(Theme.textPrimary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .glassEffect(.regular.tint(tint.opacity(0.10)), in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surfaceRaised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Theme.hairline.opacity(0.10), lineWidth: 0.5)
+        )
+        .overlay(alignment: .topLeading) {
+            // Tiny semantic dot — never a coral fill on routine metrics.
+            Circle()
+                .fill(tint)
+                .frame(width: 5, height: 5)
+                .padding(10)
+        }
+        .shadow(color: .black.opacity(scheme == .dark ? 0.28 : 0.06), radius: 6, y: 2)
     }
 
     private func bucketList(_ dict: [String: Double], sortDescending: Bool, colorByProfile: Bool = false) -> some View {
@@ -148,7 +179,8 @@ struct CostsView: View {
             ForEach(Array(pairs.enumerated()), id: \.0) { _, pair in
                 row(label: pair.0, cost: pair.1, fraction: pair.1 / max,
                     tint: colorByProfile ? Theme.profileColor(profileToken(pair.0)) : nil)
-                Divider()
+                hairlineDivider
+                    .padding(.horizontal, 20)
             }
         }
     }
@@ -163,27 +195,30 @@ struct CostsView: View {
     }
 
     private func row(label: String, cost: Double, fraction: Double, tint: Color? = nil) -> some View {
-        HStack {
+        // Proportion tint = profile (profile/project tabs) or calm blue (day/model).
+        let barTint = tint ?? Theme.accentBlue
+        return HStack {
             Text(label)
                 .font(.system(.callout, design: .rounded))
+                .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
             Spacer()
             Text(formatUSD(cost))
-                .font(.callout.monospacedDigit().weight(.semibold))
-                .foregroundStyle(Theme.dpGold)
+                .font(Theme.monoStrong)
+                .foregroundStyle(Theme.textPrimary)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 20)
         .padding(.vertical, 7)
         .background(alignment: .leading) {
+            // Single quiet left-anchored proportion fill.
             GeometryReader { geo in
-                let colors = tint.map { [$0.opacity(0.28), $0.opacity(0.10)] }
-                    ?? [Theme.neonCyan.opacity(0.18), Theme.neonMagenta.opacity(0.10)]
                 LinearGradient(
-                    colors: colors,
+                    colors: [barTint.opacity(0.26), barTint.opacity(0.10)],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
                 .frame(width: geo.size.width * fraction)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
         }
     }

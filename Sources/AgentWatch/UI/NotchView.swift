@@ -19,6 +19,10 @@ struct NotchView: View {
     }
     private var statusTint: Color { Theme.statusColor(topStatus) }
 
+    /// The notch is silent until something genuinely needs you — the coral
+    /// attention ring shows ONLY for needs-input or a pending approval.
+    private var needsAttention: Bool { topStatus == .needsInput || approval != nil }
+
     /// Height of the menu-bar / camera-notch band to keep active content clear of.
     private var menuBarInset: CGFloat {
         NSScreen.notchedScreen()?.safeAreaInsets.top ?? 28
@@ -57,30 +61,21 @@ struct NotchView: View {
 
     var body: some View {
         ZStack {
-            // The notch shape + dark fill — fills the entire host window, which
-            // the controller resizes to match the current stage exactly.
+            // The notch surface — dense, dark Liquid Glass mated to the physical
+            // bezel. Opaque warm base + frosted material + specular rim. The window
+            // is resized by the controller to match the current stage exactly.
             panelShape
-                .fill(Color.black)
+                .fill(Theme.surface)                               // near-opaque warm-dark base
+                .overlay(panelShape.fill(.regularMaterial))        // Liquid Glass substrate
                 .overlay(
-                    panelShape
-                        .stroke(statusTint.opacity(topStatus == .idle ? 0.0 : 0.45), lineWidth: 0.8)
+                    // The one dimensional flourish: a soft specular rim.
+                    panelShape.stroke(
+                        LinearGradient(
+                            colors: [Theme.specularTop.opacity(0.30), Theme.specularBottom.opacity(0.05)],
+                            startPoint: .top, endPoint: .bottom),
+                        lineWidth: 0.75)
                 )
-                // Bold pulsating clay-orange glow lining the inside of the panel,
-                // following its rounded outline. Clipped to the shape so the whole
-                // glow lands inside the window (an outer shadow would be clipped).
-                .overlay(
-                    ZStack {
-                        panelShape
-                            .stroke(Theme.glowOrange, lineWidth: pulse ? 10 : 5)
-                            .blur(radius: pulse ? 13 : 7)
-                        panelShape
-                            .stroke(Theme.glowOrange, lineWidth: pulse ? 4 : 2)
-                            .blur(radius: 2)
-                        panelShape
-                            .stroke(Theme.glowOrange, lineWidth: 1.5)
-                    }
-                    .opacity(pulse ? 1.0 : 0.6)
-                )
+                .overlay(edgeTreatment)
                 .clipShape(panelShape)
 
             // Content for the current stage
@@ -88,7 +83,7 @@ struct NotchView: View {
             case .collapsed:
                 collapsedContent.padding(.horizontal, 12).padding(.vertical, 4)
             case .preview:
-                expandedContent.padding(.horizontal, 16).padding(.vertical, 12)
+                expandedContent.padding(.horizontal, 14).padding(.vertical, 12)
             case .active:
                 activePanel
             case .approval:
@@ -97,6 +92,7 @@ struct NotchView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(panelShape)
+        .preferredColorScheme(.dark)     // the notch always renders dark (physical bezel)
         .onHover { newValue in
             if !sticky && approval == nil { hovering = newValue }
         }
@@ -106,7 +102,7 @@ struct NotchView: View {
             if sticky { hovering = true }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
                 pulse.toggle()
             }
             // Ensure the window starts at the right size on first show.
@@ -118,12 +114,30 @@ struct NotchView: View {
         }
     }
 
+    /// Outer edge per state: a coral attention ring only when something needs you,
+    /// a quiet static blue edge while working, and a barely-there hairline at rest.
+    @ViewBuilder private var edgeTreatment: some View {
+        if needsAttention {
+            ZStack {
+                panelShape
+                    .stroke(Theme.accent.opacity(pulse ? 0.55 : 0.30), lineWidth: 2)
+                    .blur(radius: 3)
+                panelShape
+                    .stroke(Theme.accent.opacity(0.7), lineWidth: 1)
+            }
+        } else if topStatus == .working {
+            panelShape.stroke(Theme.accentBlue.opacity(0.35), lineWidth: 1)
+        } else {
+            panelShape.stroke(Theme.hairlineStrong.opacity(0.16), lineWidth: 0.5)
+        }
+    }
+
     // MARK: - Active (full panel, unfolded on click)
 
     /// The unfolded panel: MenuBarContent as a rounded card, pushed below the
     /// menu-bar/notch band, in a ScrollView, with the window sized to fit it.
     private var activePanel: some View {
-        // The panel fills the window edge-to-edge so the glow on `panelShape`
+        // The panel fills the window edge-to-edge so the rim on `panelShape`
         // hugs it exactly; breathing room is inside MenuBarContent (top/bottom
         // insets) rather than an outer gutter.
         return ScrollView(.vertical, showsIndicators: false) {
@@ -148,26 +162,24 @@ struct NotchView: View {
 
     private var collapsedContent: some View {
         HStack(spacing: 6) {
+            // idle = mid gray (no halo) · working = blue · needsInput = coral.
             Circle()
                 .fill(statusTint)
                 .frame(width: 7, height: 7)
                 .opacity(topStatus == .idle ? 0.55 : (pulse ? 1.0 : 0.6))
-                .shadow(color: statusTint.opacity(0.7), radius: 3)
 
             if state.sessions.isEmpty {
                 Text("AGENTWATCH")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(Theme.eyebrowTiny)
                     .tracking(1.4)
-                    .foregroundStyle(Theme.dpChrome.opacity(0.65))
+                    .foregroundStyle(Theme.textSecondary.opacity(0.65))
             } else {
                 Text("\(state.sessions.count)")
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
-                if topStatus == .needsInput {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.dpGold)
-                }
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textPrimary)
+                // No exclamation glyph — the coral dot + ring already signal
+                // needs-input, keeping the pill quiet.
             }
         }
     }
@@ -178,36 +190,39 @@ struct NotchView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text("AGENTWATCH")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .tracking(1.5)
-                    .foregroundStyle(Theme.neonCyan)
+                    .font(Theme.eyebrowTiny)
+                    .tracking(1.4)
+                    .foregroundStyle(Theme.accentBlue)
                 Text("·")
-                    .foregroundStyle(Theme.dpChrome.opacity(0.4))
+                    .font(Theme.eyebrow)
+                    .foregroundStyle(Theme.textTertiary)
                 Text("\(state.sessions.count) ACTIVE")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(Theme.eyebrow)
                     .tracking(1.2)
-                    .foregroundStyle(Theme.dpChrome.opacity(0.9))
+                    .foregroundStyle(Theme.textSecondary)
                 Spacer()
                 Text("CLICK TO OPEN")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Theme.dpChrome.opacity(0.45))
+                    .font(Theme.eyebrowTiny)
+                    .tracking(1.4)
+                    .foregroundStyle(Theme.textTertiary)
             }
 
             if state.sessions.isEmpty {
                 Text("No active Claude Code sessions")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.dpChrome.opacity(0.7))
+                    .font(Theme.prose)
+                    .foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 4)
             } else {
-                VStack(spacing: 4) {
+                VStack(spacing: 8) {
                     ForEach(state.sessions.prefix(6)) { session in
                         notchRow(session: session)
                     }
                     if state.sessions.count > 6 {
                         Text("+ \(state.sessions.count - 6) more")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(Theme.dpChrome.opacity(0.5))
+                            .font(Theme.mono)
+                            .foregroundStyle(Theme.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
@@ -223,52 +238,58 @@ struct NotchView: View {
                 HStack(spacing: 7) {
                     Image(systemName: "hand.raised.fill")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.dpGold)
+                        .foregroundStyle(Theme.accent)
                     Text("PERMISSION")
-                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                        .tracking(1.3)
-                        .foregroundStyle(Theme.dpChrome.opacity(0.85))
+                        .font(Theme.eyebrow)
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.textSecondary)
                     Spacer()
                     if let prof = approvalProfile(req) {
+                        // Glass chip variant — floats over the busy card content.
                         Text(prof.uppercased())
-                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.55))
-                                .overlay(Capsule().strokeBorder(Theme.profileColor(prof).opacity(0.8), lineWidth: 1)))
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundStyle(Theme.profileColor(prof))
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .glassEffect(.regular.tint(Theme.profileColor(prof).opacity(0.16)), in: Capsule())
+                            .overlay(Capsule().strokeBorder(Theme.profileColor(prof).opacity(0.45), lineWidth: 0.75))
                     }
                     if ApprovalBroker.shared.pending.count > 1 {
                         Text("+\(ApprovalBroker.shared.pending.count - 1)")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundStyle(Theme.dpChrome.opacity(0.6))
+                            .font(Theme.mono)
+                            .foregroundStyle(Theme.textTertiary)
                     }
                 }
 
                 Text(req.headline)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(Theme.titleCard)
+                    .foregroundStyle(Theme.textPrimary)
                     .lineLimit(2)
 
                 ScrollView(.vertical) {
                     Text(req.detail.isEmpty ? "(no details)" : req.detail)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Theme.dpChrome.opacity(0.9))
+                        .font(Theme.approvalDetail)
+                        .foregroundStyle(Theme.textSecondary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(9)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.surfaceSunken))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Theme.hairline.opacity(0.12), lineWidth: 0.5)
+                )
 
                 HStack(spacing: 8) {
-                    approvalButton("Deny", tint: .red) {
+                    approvalButton("Deny", tint: Theme.danger, prominent: true) {
                         ApprovalBroker.shared.resolve(req, decision: "deny")
                     }
-                    approvalButton("Ask in terminal", tint: Theme.dpChrome.opacity(0.35)) {
+                    approvalButton("Ask in terminal", tint: Theme.textSecondary) {
                         ApprovalBroker.shared.resolve(req, decision: "ask")
                     }
                     Spacer()
-                    approvalButton("Allow", tint: Theme.neonCyan) {
+                    approvalButton("Allow", tint: Theme.accent, prominent: true) {
                         ApprovalBroker.shared.resolve(req, decision: "allow")
                     }
                 }
@@ -282,12 +303,21 @@ struct NotchView: View {
 
     /// A tap-gesture "button" (not SwiftUI Button) so it works inside the notch's
     /// non-key borderless window, matching how the notch already handles taps.
-    private func approvalButton(_ label: String, tint: Color, action: @escaping () -> Void) -> some View {
+    /// `prominent` = filled (coral CTA / danger); otherwise neutral glass.
+    private func approvalButton(_ label: String, tint: Color, prominent: Bool = false,
+                                action: @escaping () -> Void) -> some View {
         Text(label)
             .font(.system(size: 12, weight: .bold, design: .rounded))
-            .foregroundStyle(.white)
+            .foregroundStyle(prominent ? Theme.onAccent : tint)
             .padding(.horizontal, 13).padding(.vertical, 7)
-            .background(Capsule().fill(tint.opacity(0.9)))
+            .glassEffect(.regular.tint(prominent ? tint.opacity(0.88) : tint.opacity(0.12)), in: Capsule())
+            .overlay(
+                Capsule().strokeBorder(
+                    LinearGradient(colors: [Theme.specularTop.opacity(0.30), Theme.specularBottom.opacity(0.05)],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 0.75)
+            )
+            .overlay(Capsule().strokeBorder(tint.opacity(prominent ? 0 : 0.35), lineWidth: 0.5))
             .contentShape(Capsule())
             .onTapGesture(perform: action)
     }
@@ -301,20 +331,19 @@ struct NotchView: View {
             Circle()
                 .fill(Theme.statusColor(session.status))
                 .frame(width: 6, height: 6)
-                .shadow(color: Theme.statusColor(session.status).opacity(0.7), radius: 2)
             Text(session.displayTitle)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white)
+                .font(Theme.rowTitle)
+                .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer()
             HStack(spacing: 8) {
                 Label(session.elapsedString, systemImage: "clock")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Theme.dpChrome.opacity(0.75))
+                    .font(Theme.mono)
+                    .foregroundStyle(Theme.textSecondary)
                 Label(session.tokensString, systemImage: "circle.hexagongrid")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Theme.neonCyan.opacity(0.85))
+                    .font(Theme.mono)
+                    .foregroundStyle(Theme.textSecondary)
             }
             .labelStyle(NotchInlineLabelStyle())
         }

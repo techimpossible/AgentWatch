@@ -36,36 +36,61 @@ struct MascotView: View {
     var onComplete: () -> Void = {}
     var onBurst: () -> Void = {}   // fired when the user pops it (for confetti)
 
-    /// Which character walks this time — chosen at random per appearance.
-    enum Kind: CaseIterable { case sponge, seal, robot, blob }
-    @State private var kind: Kind = Kind.allCases.randomElement() ?? .sponge
+    /// Built-in drawn characters (no assets needed).
+    enum DrawnKind: CaseIterable { case sponge, robot, blob }
 
-    /// Per-kind body + outline colours for the drawn characters. (The seal is
-    /// image-based; these are only its fallback tint if the bundled art is absent.)
+    /// One appearance is either a drawn character or a bundled image. Any PNG
+    /// dropped into Resources/Mascots/ becomes an image persona automatically —
+    /// no code change needed (see `roster`).
+    enum Persona { case drawn(DrawnKind); case image(NSImage) }
+
+    /// Every available persona: the built-in drawn ones, plus one per PNG found
+    /// in the app bundle's Mascots/ folder. Built once. To add a mascot, drop a
+    /// PNG into Resources/Mascots/ and rebuild — it joins the rotation.
+    private static let roster: [Persona] = {
+        var list: [Persona] = DrawnKind.allCases.map { .drawn($0) }
+        let urls = Bundle.main.urls(forResourcesWithExtension: "png", subdirectory: "Mascots") ?? []
+        for url in urls.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            if let img = NSImage(contentsOf: url) { list.append(.image(img)) }
+        }
+        return list
+    }()
+
+    /// Which persona walks this time — chosen at random per appearance.
+    @State private var persona: Persona = MascotView.roster.randomElement() ?? .drawn(.sponge)
+
+    /// The drawn kind for this appearance, or nil when it's an image persona.
+    private var drawnKind: DrawnKind? {
+        if case .drawn(let k) = persona { return k }
+        return nil
+    }
+    /// True when this appearance is a bundled image rather than a drawn character.
+    private var isImage: Bool {
+        if case .image = persona { return true }
+        return false
+    }
+
+    /// Body + outline colours for the drawn characters (they also tint the burst
+    /// shards). Image personas fall back to a neutral pair.
     private var bodyColor: Color {
-        switch kind {
-        case .sponge: return Color(red: 0.98, green: 0.82, blue: 0.22)
-        case .robot:  return Color(red: 0.64, green: 0.68, blue: 0.74)
-        case .blob:   return Color(red: 0.62, green: 0.50, blue: 0.96)
-        case .seal:   return Color(red: 0.55, green: 0.70, blue: 0.45)
+        switch persona {
+        case .drawn(.sponge): return Color(red: 0.98, green: 0.82, blue: 0.22)
+        case .drawn(.robot):  return Color(red: 0.64, green: 0.68, blue: 0.74)
+        case .drawn(.blob):   return Color(red: 0.62, green: 0.50, blue: 0.96)
+        case .image:          return Color(red: 0.55, green: 0.70, blue: 0.45)
         }
     }
     private var outlineColor: Color {
-        switch kind {
-        case .sponge: return Color(red: 0.80, green: 0.62, blue: 0.10)
-        case .robot:  return Color(red: 0.30, green: 0.34, blue: 0.40)
-        case .blob:   return Color(red: 0.36, green: 0.28, blue: 0.62)
-        case .seal:   return Color(red: 0.30, green: 0.42, blue: 0.24)
+        switch persona {
+        case .drawn(.sponge): return Color(red: 0.80, green: 0.62, blue: 0.10)
+        case .drawn(.robot):  return Color(red: 0.30, green: 0.34, blue: 0.40)
+        case .drawn(.blob):   return Color(red: 0.36, green: 0.28, blue: 0.62)
+        case .image:          return Color(red: 0.30, green: 0.42, blue: 0.24)
         }
     }
 
-    private let sealSize: CGFloat = 96
-    /// Bundled seal art, loaded once. nil when there's no app bundle (dev/tests)
-    /// → the seal kind falls back to a drawn character.
-    private static let sealImage: NSImage? = {
-        guard let url = Bundle.main.url(forResource: "seal", withExtension: "png") else { return nil }
-        return NSImage(contentsOf: url)
-    }()
+    /// Size for image personas (drawn characters use bodyW/bodyH).
+    private let imageSize: CGFloat = 96
 
     private let bodyW: CGFloat = 40
     private let bodyH: CGFloat = 44
@@ -101,7 +126,7 @@ struct MascotView: View {
 
     private var peekHidden: CGFloat { stripHeight + 10 }
 
-    private var charWidth: CGFloat { max(bodyW * 2.0, sealSize) }
+    private var charWidth: CGFloat { max(bodyW * 2.0, imageSize) }
 
     var body: some View {
         // TimelineView drives the horizontal walk from elapsed time — it's not a
@@ -143,11 +168,12 @@ struct MascotView: View {
     }
 
     /// The bubble above the mascot: drawn characters use the reason/profile speech
-    /// bubble; the seal art already carries its own bubble, so it gets a small chip.
+    /// bubble; image personas may carry their own bubble in the art, so they get a
+    /// small profile chip instead.
     @ViewBuilder private var bubbleOrChip: some View {
-        if kind == .seal {
-            sealProfileChip
-                .offset(y: -(sealSize + 4))
+        if isImage {
+            imageProfileChip
+                .offset(y: -(imageSize + 4))
                 .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
         } else {
             speechBubble
@@ -157,12 +183,12 @@ struct MascotView: View {
     }
 
     /// The character for this appearance. Drawn kinds share the striding legs +
-    /// swinging arms; the seal is a self-contained image that waddles.
+    /// swinging arms; an image persona is a self-contained picture that waddles.
     @ViewBuilder private var creatureBody: some View {
-        switch kind {
-        case .seal:
-            sealBody
-        default:
+        switch persona {
+        case .image(let img):
+            imageBody(img)
+        case .drawn:
             ZStack(alignment: .bottom) {
                 arms
                 VStack(spacing: -2) {
@@ -174,26 +200,19 @@ struct MascotView: View {
     }
 
     @ViewBuilder private var drawnBody: some View {
-        switch kind {
-        case .robot: robotBody
-        case .blob:  blobBody
-        default:     spongeBody
+        switch persona {
+        case .drawn(.robot): robotBody
+        case .drawn(.blob):  blobBody
+        default:             spongeBody
         }
     }
 
-    /// Image-based seal; waddles gently via the stride phase. Falls back to a
-    /// drawn blob if the bundled art can't be loaded.
-    private var sealBody: some View {
-        Group {
-            if let img = Self.sealImage {
-                Image(nsImage: img).resizable().scaledToFit()
-            } else {
-                blobBody
-            }
-        }
-        .frame(width: sealSize, height: sealSize)
-        .rotationEffect(.degrees(stride ? 3 : -3), anchor: .bottom)
-        .shadow(color: reason.tint.opacity(0.35), radius: 12)
+    /// Image persona: waddles gently via the stride phase.
+    private func imageBody(_ img: NSImage) -> some View {
+        Image(nsImage: img).resizable().scaledToFit()
+            .frame(width: imageSize, height: imageSize)
+            .rotationEffect(.degrees(stride ? 3 : -3), anchor: .bottom)
+            .shadow(color: reason.tint.opacity(0.35), radius: 12)
     }
 
     /// Boxy robot: square eyes, a straight mouth, and a little antenna.
@@ -236,8 +255,8 @@ struct MascotView: View {
         .shadow(color: reason.tint.opacity(0.35), radius: 14)
     }
 
-    /// Small profile pill for the seal (whose art already has a speech bubble).
-    private var sealProfileChip: some View {
+    /// Small profile pill for image personas (whose art may include a bubble).
+    private var imageProfileChip: some View {
         Text(profile.uppercased())
             .font(.system(size: 10, weight: .heavy, design: .monospaced))
             .tracking(0.5)

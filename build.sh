@@ -43,9 +43,11 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
     cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi
-# Mascot art (e.g. seal.png) — loaded at runtime via Bundle.main.
+# Mascot art — every PNG in Resources/Mascots/ ships into the bundle's Mascots/
+# subfolder and is discovered at runtime (drop in a PNG, rebuild, it appears).
 if [ -d "$ROOT/Resources/Mascots" ]; then
-    cp "$ROOT/Resources/Mascots/"*.png "$APP/Contents/Resources/" 2>/dev/null || true
+    mkdir -p "$APP/Contents/Resources/Mascots"
+    cp "$ROOT/Resources/Mascots/"*.png "$APP/Contents/Resources/Mascots/" 2>/dev/null || true
 fi
 
 echo "==> ad-hoc codesign"

@@ -118,9 +118,12 @@ final class MascotOverlayController {
         w.isOpaque = false
         w.backgroundColor = .clear
         w.hasShadow = false
-        // Receive clicks so the mascot is tappable; only the sprite itself is
-        // hit-testable in SwiftUI, so empty strip areas still pass through.
-        w.ignoresMouseEvents = false
+        // Fully click-through. The strip spans the whole width of the screen, so
+        // if it intercepted mouse events it would swallow clicks/typing meant for
+        // the window behind it (e.g. an editor in the bottom band). A decorative
+        // overlay must never steal input, so it ignores mouse events entirely.
+        // (The click-to-inflate/burst interaction in MascotView is therefore unreachable.)
+        w.ignoresMouseEvents = true
         w.isMovable = false
         w.isReleasedWhenClosed = false
         return w

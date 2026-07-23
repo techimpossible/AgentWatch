@@ -43,6 +43,10 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
     cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi
+# Mascot art (e.g. seal.png) — loaded at runtime via Bundle.main.
+if [ -d "$ROOT/Resources/Mascots" ]; then
+    cp "$ROOT/Resources/Mascots/"*.png "$APP/Contents/Resources/" 2>/dev/null || true
+fi
 
 echo "==> ad-hoc codesign"
 xattr -cr "$APP"

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Why the mascot showed up — drives the speech bubble + accent.
@@ -35,9 +36,36 @@ struct MascotView: View {
     var onComplete: () -> Void = {}
     var onBurst: () -> Void = {}   // fired when the user pops it (for confetti)
 
-    // Warm sponge-yellow body with a slightly darker outline.
-    private static let body = Color(red: 0.98, green: 0.82, blue: 0.22)
-    private static let outline = Color(red: 0.80, green: 0.62, blue: 0.10)
+    /// Which character walks this time — chosen at random per appearance.
+    enum Kind: CaseIterable { case sponge, seal, robot, blob }
+    @State private var kind: Kind = Kind.allCases.randomElement() ?? .sponge
+
+    /// Per-kind body + outline colours for the drawn characters. (The seal is
+    /// image-based; these are only its fallback tint if the bundled art is absent.)
+    private var bodyColor: Color {
+        switch kind {
+        case .sponge: return Color(red: 0.98, green: 0.82, blue: 0.22)
+        case .robot:  return Color(red: 0.64, green: 0.68, blue: 0.74)
+        case .blob:   return Color(red: 0.62, green: 0.50, blue: 0.96)
+        case .seal:   return Color(red: 0.55, green: 0.70, blue: 0.45)
+        }
+    }
+    private var outlineColor: Color {
+        switch kind {
+        case .sponge: return Color(red: 0.80, green: 0.62, blue: 0.10)
+        case .robot:  return Color(red: 0.30, green: 0.34, blue: 0.40)
+        case .blob:   return Color(red: 0.36, green: 0.28, blue: 0.62)
+        case .seal:   return Color(red: 0.30, green: 0.42, blue: 0.24)
+        }
+    }
+
+    private let sealSize: CGFloat = 96
+    /// Bundled seal art, loaded once. nil when there's no app bundle (dev/tests)
+    /// → the seal kind falls back to a drawn character.
+    private static let sealImage: NSImage? = {
+        guard let url = Bundle.main.url(forResource: "seal", withExtension: "png") else { return nil }
+        return NSImage(contentsOf: url)
+    }()
 
     private let bodyW: CGFloat = 40
     private let bodyH: CGFloat = 44
@@ -73,7 +101,7 @@ struct MascotView: View {
 
     private var peekHidden: CGFloat { stripHeight + 10 }
 
-    private var charWidth: CGFloat { bodyW * 2.0 }
+    private var charWidth: CGFloat { max(bodyW * 2.0, sealSize) }
 
     var body: some View {
         // TimelineView drives the horizontal walk from elapsed time — it's not a
@@ -97,19 +125,9 @@ struct MascotView: View {
 
     private var character: some View {
         ZStack(alignment: .bottom) {
-            if bubbleShown {
-                speechBubble
-                    .offset(y: -(bodyH + legLength + 16))
-                    .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
-            }
-            ZStack(alignment: .bottom) {
-                arms
-                VStack(spacing: -2) {
-                    spongeBody
-                    legs
-                }
-            }
-            .opacity(burst ? Double(1 - burstProgress) : 1)
+            if bubbleShown { bubbleOrChip }
+            creatureBody
+                .opacity(burst ? Double(1 - burstProgress) : 1)
             if burst { burstParticles }
         }
         .frame(width: charWidth, height: stripHeight, alignment: .bottom)
@@ -124,13 +142,122 @@ struct MascotView: View {
         )
     }
 
+    /// The bubble above the mascot: drawn characters use the reason/profile speech
+    /// bubble; the seal art already carries its own bubble, so it gets a small chip.
+    @ViewBuilder private var bubbleOrChip: some View {
+        if kind == .seal {
+            sealProfileChip
+                .offset(y: -(sealSize + 4))
+                .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+        } else {
+            speechBubble
+                .offset(y: -(bodyH + legLength + 16))
+                .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// The character for this appearance. Drawn kinds share the striding legs +
+    /// swinging arms; the seal is a self-contained image that waddles.
+    @ViewBuilder private var creatureBody: some View {
+        switch kind {
+        case .seal:
+            sealBody
+        default:
+            ZStack(alignment: .bottom) {
+                arms
+                VStack(spacing: -2) {
+                    drawnBody
+                    legs
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var drawnBody: some View {
+        switch kind {
+        case .robot: robotBody
+        case .blob:  blobBody
+        default:     spongeBody
+        }
+    }
+
+    /// Image-based seal; waddles gently via the stride phase. Falls back to a
+    /// drawn blob if the bundled art can't be loaded.
+    private var sealBody: some View {
+        Group {
+            if let img = Self.sealImage {
+                Image(nsImage: img).resizable().scaledToFit()
+            } else {
+                blobBody
+            }
+        }
+        .frame(width: sealSize, height: sealSize)
+        .rotationEffect(.degrees(stride ? 3 : -3), anchor: .bottom)
+        .shadow(color: reason.tint.opacity(0.35), radius: 12)
+    }
+
+    /// Boxy robot: square eyes, a straight mouth, and a little antenna.
+    private var robotBody: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(bodyColor)
+                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(outlineColor, lineWidth: 1.5))
+            VStack(spacing: 4) {
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 1).fill(.black.opacity(0.8)).frame(width: 6, height: 6)
+                    RoundedRectangle(cornerRadius: 1).fill(.black.opacity(0.8)).frame(width: 6, height: 6)
+                }
+                RoundedRectangle(cornerRadius: 1).fill(outlineColor).frame(width: 14, height: 2.5)
+            }
+        }
+        .frame(width: bodyW, height: bodyH)
+        .overlay(alignment: .top) {
+            ZStack {
+                Capsule().fill(outlineColor).frame(width: 2, height: 8)
+                Circle().fill(reason.tint).frame(width: 5, height: 5).offset(y: -6)
+            }
+            .offset(y: -7)
+        }
+        .shadow(color: bodyColor.opacity(0.5), radius: 8)
+        .shadow(color: reason.tint.opacity(0.35), radius: 14)
+    }
+
+    /// Rounded blob with two big eyes.
+    private var blobBody: some View {
+        ZStack {
+            Ellipse()
+                .fill(bodyColor)
+                .overlay(Ellipse().strokeBorder(outlineColor, lineWidth: 1.5))
+            HStack(spacing: 5) { eye; eye }.offset(y: -2)
+        }
+        .frame(width: bodyW, height: bodyH)
+        .shadow(color: bodyColor.opacity(0.5), radius: 8)
+        .shadow(color: reason.tint.opacity(0.35), radius: 14)
+    }
+
+    /// Small profile pill for the seal (whose art already has a speech bubble).
+    private var sealProfileChip: some View {
+        Text(profile.uppercased())
+            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+            .tracking(0.5)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                Capsule().fill(Color.black.opacity(0.8))
+                    .overlay(Capsule().strokeBorder(Theme.profileColor(profile).opacity(0.8), lineWidth: 1))
+            )
+            .fixedSize()
+    }
+
     /// Shards flung outward when the mascot bursts.
     private var burstParticles: some View {
         ZStack {
             ForEach(0..<12, id: \.self) { i in
                 let angle = Double(i) / 12 * 2 * .pi
                 Circle()
-                    .fill(i % 2 == 0 ? Self.body : Self.outline)
+                    .fill(i % 2 == 0 ? bodyColor : outlineColor)
                     .frame(width: 7, height: 7)
                     .offset(x: CGFloat(cos(angle)) * 48 * burstProgress,
                             y: CGFloat(sin(angle)) * 48 * burstProgress - (bodyH * 0.5 + legLength))
@@ -143,10 +270,10 @@ struct MascotView: View {
     private var spongeBody: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Self.body)
+                .fill(bodyColor)
                 .overlay(
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .strokeBorder(Self.outline, lineWidth: 1.5)
+                        .strokeBorder(outlineColor, lineWidth: 1.5)
                 )
                 .overlay(pores)
 
@@ -160,7 +287,7 @@ struct MascotView: View {
             .padding(.top, 4)
         }
         .frame(width: bodyW, height: bodyH)
-        .shadow(color: Self.body.opacity(0.55), radius: 8)
+        .shadow(color: bodyColor.opacity(0.55), radius: 8)
         .shadow(color: reason.tint.opacity(0.40), radius: 14)
     }
 
@@ -177,7 +304,7 @@ struct MascotView: View {
 
     private func poreDot(dx: CGFloat, dy: CGFloat, d: CGFloat) -> some View {
         Ellipse()
-            .fill(Self.outline.opacity(0.35))
+            .fill(outlineColor.opacity(0.35))
             .frame(width: d, height: d * 0.8)
             .offset(x: dx, y: dy)
     }
@@ -185,7 +312,7 @@ struct MascotView: View {
     private var eye: some View {
         ZStack {
             Circle().fill(.white)
-                .overlay(Circle().strokeBorder(Self.outline.opacity(0.7), lineWidth: 0.8))
+                .overlay(Circle().strokeBorder(outlineColor.opacity(0.7), lineWidth: 0.8))
                 .frame(width: 11, height: 11)
             Circle().fill(.black.opacity(0.85))
                 .frame(width: 4, height: 4)
@@ -211,8 +338,8 @@ struct MascotView: View {
 
     private func leg(angle: Double) -> some View {
         Capsule()
-            .fill(Self.body)
-            .overlay(Capsule().strokeBorder(Self.outline.opacity(0.6), lineWidth: 1))
+            .fill(bodyColor)
+            .overlay(Capsule().strokeBorder(outlineColor.opacity(0.6), lineWidth: 1))
             .frame(width: 5, height: legLength)
             .rotationEffect(.degrees(angle), anchor: .top)
     }
@@ -230,8 +357,8 @@ struct MascotView: View {
 
     private func arm(angle: Double) -> some View {
         Capsule()
-            .fill(Self.body)
-            .overlay(Capsule().strokeBorder(Self.outline.opacity(0.6), lineWidth: 1))
+            .fill(bodyColor)
+            .overlay(Capsule().strokeBorder(outlineColor.opacity(0.6), lineWidth: 1))
             .frame(width: 4, height: armLength)
             .rotationEffect(.degrees(angle), anchor: .top)
     }

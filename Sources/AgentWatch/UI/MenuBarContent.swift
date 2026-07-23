@@ -165,45 +165,34 @@ struct MenuBarContent: View {
 
             Divider().overlay(Theme.hairline.opacity(0.12))
 
-            HStack(spacing: 12) {
-                Toggle(isOn: Binding(
-                    get: { launchAtLogin },
-                    set: { newValue in
-                        if let actual = LoginItem.setEnabled(newValue) {
-                            launchAtLogin = actual
+            // Footer on two rows so nothing crams at the fixed popover width:
+            // toggles up top, actions beneath.
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 20) {
+                    footerToggle("LAUNCH AT LOGIN", isOn: Binding(
+                        get: { launchAtLogin },
+                        set: { newValue in
+                            if let actual = LoginItem.setEnabled(newValue) { launchAtLogin = actual }
                         }
-                    }
-                )) {
-                    Text("LAUNCH AT LOGIN")
-                        .font(Theme.eyebrowTiny)
-                        .tracking(1.4)
-                        .foregroundStyle(Theme.textSecondary)
+                    ))
+                    footerToggle("MASCOT", isOn: Binding(
+                        get: { mascotEnabled },
+                        set: { newValue in
+                            mascotEnabled = newValue
+                            MascotOverlayController.isEnabled = newValue
+                        }
+                    ))
+                    Spacer(minLength: 0)
                 }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .tint(Theme.accentBlue)
-                Toggle(isOn: Binding(
-                    get: { mascotEnabled },
-                    set: { newValue in
-                        mascotEnabled = newValue
-                        MascotOverlayController.isEnabled = newValue
-                    }
-                )) {
-                    Text("MASCOT")
-                        .font(Theme.eyebrowTiny)
-                        .tracking(1.4)
-                        .foregroundStyle(Theme.textSecondary)
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    Button("REFRESH") { Task { await state.refresh() } }
+                        .buttonStyle(.secondary)
+                        .keyboardShortcut("r")
+                    Button("QUIT") { NSApp.terminate(nil) }
+                        .buttonStyle(.danger)
+                        .keyboardShortcut("q")
                 }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .tint(Theme.accentBlue)
-                Spacer()
-                Button("REFRESH") { Task { await state.refresh() } }
-                    .buttonStyle(.secondary)
-                    .keyboardShortcut("r")
-                Button("QUIT") { NSApp.terminate(nil) }
-                    .buttonStyle(.danger)
-                    .keyboardShortcut("q")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -219,6 +208,21 @@ struct MenuBarContent: View {
                 withTransaction(t) { launchAtLogin = actual }
             }
         }
+    }
+
+    /// A compact switch whose label never wraps — the footer cram fix.
+    private func footerToggle(_ label: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Text(label)
+                .font(Theme.eyebrowTiny)
+                .tracking(1.4)
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .toggleStyle(.switch)
+        .controlSize(.mini)
+        .tint(Theme.accentBlue)
     }
 }
 

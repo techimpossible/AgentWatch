@@ -29,7 +29,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
         // content's fitting size so the popover grows to show every session
         // (and profile group) instead of clipping at a hardcoded height.
         let host = NSHostingController(
-            rootView: MenuBarContent().frame(width: 400).environment(state)
+            rootView: MenuBarContent().frame(width: 440).environment(state)
         )
         host.sizingOptions = [.preferredContentSize]
         pop.contentViewController = host

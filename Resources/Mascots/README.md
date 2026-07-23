@@ -12,4 +12,4 @@ Art tips:
   profile chip above them (drawn mascots get the full speech bubble instead).
 
 Built-in drawn characters (sponge, robot, blob) need no art and are always in the
-rotation alongside whatever PNGs live here. `seal.png` is the Monachus monk seal.
+rotation alongside whatever PNGs live here.

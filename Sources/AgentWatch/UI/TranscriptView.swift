@@ -21,7 +21,7 @@ struct TranscriptView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider()
+            Divider().overlay(Theme.hairline.opacity(0.12))
             if let err = loadError {
                 ContentUnavailableView(
                     "Could not load transcript",
@@ -32,13 +32,15 @@ struct TranscriptView: View {
                 ContentUnavailableView("Loading…", systemImage: "ellipsis")
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
+                    LazyVStack(alignment: .leading, spacing: 20) {
                         ForEach(entries) { entry in
                             EntryView(entry: entry)
                             Divider()
+                                .overlay(Theme.hairline.opacity(0.12))
+                                .padding(.leading, 28)
                         }
                     }
-                    .padding(16)
+                    .padding(20)
                 }
             }
         }
@@ -48,28 +50,46 @@ struct TranscriptView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(headerTitle).font(.headline)
-                Text(headerSubtitle).font(.caption).foregroundStyle(.secondary)
-                Text("Session \(headerSessionId)").font(.caption2).foregroundStyle(.tertiary)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(headerTitle)
+                    .font(Theme.titleCard)
+                    .foregroundStyle(Theme.textPrimary)
+                Text(headerSubtitle)
+                    .font(Theme.mono)
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text("SESSION \(headerSessionId)")
+                    .font(Theme.eyebrowTiny)
+                    .tracking(1.0)
+                    .foregroundStyle(Theme.textTertiary)
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 4) {
                 if case .active(let s) = source {
                     Label(s.status.label, systemImage: s.status.symbol)
+                        .font(Theme.eyebrow)
+                        .tracking(0.8)
                         .foregroundStyle(s.status.color)
-                    Text("PID \(s.pid)").font(.caption).foregroundStyle(.secondary)
+                    Text("PID \(s.pid)")
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textSecondary)
                 } else {
-                    Label("Historical", systemImage: "clock")
-                        .foregroundStyle(.secondary)
+                    Label("HISTORICAL", systemImage: "clock")
+                        .font(Theme.eyebrow)
+                        .tracking(0.8)
+                        .foregroundStyle(Theme.textSecondary)
                 }
                 if !entries.isEmpty {
-                    Text("\(entries.count) messages").font(.caption2).foregroundStyle(.tertiary)
+                    Text("\(entries.count) MESSAGES")
+                        .font(Theme.eyebrowTiny)
+                        .tracking(1.0)
+                        .foregroundStyle(Theme.textTertiary)
                 }
             }
         }
-        .padding(12)
+        .padding(20)
     }
 
     private var headerTitle: String {
@@ -114,25 +134,29 @@ private struct EntryView: View {
     let entry: TranscriptEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: roleIcon)
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(roleColor)
-                Text(roleLabel)
-                    .font(.headline)
+                Text(roleLabel.uppercased())
+                    .font(Theme.eyebrow)
+                    .tracking(1.2)
                     .foregroundStyle(roleColor)
                 if let model = entry.model {
                     Text(modelShortName(model))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textSecondary)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(.gray.opacity(0.15), in: Capsule())
+                        .background(Capsule().fill(Theme.surfaceRaised))
+                        .overlay(Capsule().strokeBorder(Theme.hairline.opacity(0.14), lineWidth: 0.75))
                 }
                 Spacer()
                 if let ts = entry.timestamp {
                     Text(ts.formatted(date: .omitted, time: .shortened))
-                        .font(.caption2).foregroundStyle(.tertiary)
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textTertiary)
                 }
                 CopyButton(
                     text: copyableText,
@@ -180,10 +204,10 @@ private struct EntryView: View {
     }
     private var roleColor: Color {
         switch entry.role {
-        case .user: Theme.neonCyan
-        case .assistant: Theme.neonMagenta
-        case .system: Theme.dpChrome
-        case .other: .gray
+        case .user: Theme.accentBlue
+        case .assistant: Theme.textPrimary
+        case .system: Theme.idle
+        case .other: Theme.textTertiary
         }
     }
     private var roleLabel: String {
@@ -209,54 +233,77 @@ private struct BlockView: View {
         switch block {
         case .text(let s):
             Text(s)
+                .font(.system(.body, design: .serif))
+                .foregroundStyle(Theme.textPrimary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .thinking(let s):
             DisclosureGroup {
                 Text(s)
                     .font(.system(.body, design: .serif))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.textSecondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Theme.surfaceSunken)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Theme.hairline.opacity(0.12), lineWidth: 0.5)
+                    )
             } label: {
                 Label("Thinking (\(s.count) chars)", systemImage: "bubble.left")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.eyebrow)
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.textSecondary)
             }
         case .redactedThinking:
             Label("Redacted thinking", systemImage: "eye.slash")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Theme.eyebrow)
+                .tracking(0.8)
+                .foregroundStyle(Theme.textSecondary)
         case .toolUse(let name, let input):
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Tool: \(name)", systemImage: "wrench.and.screwdriver")
-                    .font(.caption.bold())
-                    .foregroundStyle(.orange)
-                Text(input)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+            VStack(alignment: .leading, spacing: 6) {
+                Label("TOOL · \(name)", systemImage: "wrench.and.screwdriver")
+                    .font(Theme.eyebrow)
+                    .tracking(1.0)
+                    .foregroundStyle(Theme.textSecondary)
+                payloadWell(input, tint: Theme.hairline.opacity(0.12))
             }
         case .toolResult(let text, let isError):
-            VStack(alignment: .leading, spacing: 4) {
-                Label(isError ? "Tool error" : "Tool result",
+            VStack(alignment: .leading, spacing: 6) {
+                Label(isError ? "TOOL ERROR" : "TOOL RESULT",
                       systemImage: isError ? "xmark.circle" : "checkmark.circle")
-                    .font(.caption.bold())
-                    .foregroundStyle(isError ? .red : .green)
-                Text(text.isEmpty ? "(empty)" : text)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background((isError ? Color.red : .green).opacity(0.08),
-                                in: RoundedRectangle(cornerRadius: 6))
+                    .font(Theme.eyebrow)
+                    .tracking(1.0)
+                    .foregroundStyle(isError ? Theme.danger : Theme.accentGreen)
+                payloadWell(text.isEmpty ? "(empty)" : text,
+                            tint: (isError ? Theme.danger : Theme.accentGreen).opacity(0.30))
             }
         case .unknown(let t):
             Text("(unknown block: \(t))")
-                .font(.caption).foregroundStyle(.tertiary)
+                .font(Theme.mono)
+                .foregroundStyle(Theme.textTertiary)
         }
+    }
+
+    /// Inset payload well: sunken warm surface, monospaced payload, hairline (or semantic) border.
+    private func payloadWell(_ content: String, tint: Color) -> some View {
+        Text(content)
+            .font(Theme.approvalDetail)
+            .foregroundStyle(Theme.textSecondary)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Theme.surfaceSunken)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(tint, lineWidth: 0.75)
+            )
     }
 }

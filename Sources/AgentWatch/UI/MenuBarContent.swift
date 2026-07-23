@@ -43,17 +43,17 @@ struct MenuBarContent: View {
 
     var body: some View {
         ZStack {
-            // Opaque dark base — guarantees legibility regardless of system popover chrome.
-            Theme.inkDeep
+            // Solid warm base + one barely-there sheen (§7.1). The popover base is
+            // never glass; the notch always renders dark, so we resolve dark tokens.
+            Theme.surface
                 .overlay {
-                    // Subtle neon corner glows for the cyberpunk vibe, tuned down.
-                    RadialGradient(
-                        colors: [Theme.neonCyan.opacity(0.20), .clear],
-                        center: .topLeading, startRadius: 20, endRadius: 280
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.03), .clear],
+                        startPoint: .top, endPoint: .bottom
                     )
                     RadialGradient(
-                        colors: [Theme.neonMagenta.opacity(0.14), .clear],
-                        center: .bottomTrailing, startRadius: 20, endRadius: 280
+                        colors: [Theme.accent.opacity(0.06), .clear],
+                        center: .topTrailing, startRadius: 20, endRadius: 320
                     )
                 }
 
@@ -72,15 +72,16 @@ struct MenuBarContent: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Text("AGENTWATCH")
-                    .font(Theme.chromeCaption)
-                    .tracking(2.0)
-                    .foregroundStyle(Theme.neonCyan)
+                    .font(Theme.eyebrow)
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.textSecondary)
                 Text("·")
-                    .foregroundStyle(Theme.dpChrome.opacity(0.5))
+                    .font(Theme.mono)
+                    .foregroundStyle(Theme.textTertiary)
                 Text("\(state.sessions.count) ACTIVE")
-                    .font(Theme.chromeCaption)
-                    .tracking(1.0)
-                    .foregroundStyle(Theme.dpChrome)
+                    .font(Theme.eyebrow)
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.textTertiary)
                 Spacer()
                 Button {
                     NSApp.setActivationPolicy(.regular)
@@ -90,7 +91,7 @@ struct MenuBarContent: View {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.body.weight(.semibold))
                 }
-                .buttonStyle(.neonCyan)
+                .buttonStyle(.secondary)
                 .help("History")
                 .accessibilityLabel("History")
                 Button {
@@ -101,7 +102,7 @@ struct MenuBarContent: View {
                     Image(systemName: "magnifyingglass")
                         .font(.body.weight(.semibold))
                 }
-                .buttonStyle(.neonMagenta)
+                .buttonStyle(.secondary)
                 .help("Search")
                 .accessibilityLabel("Search")
                 Button {
@@ -112,35 +113,33 @@ struct MenuBarContent: View {
                     Image(systemName: "dollarsign.circle")
                         .font(.body.weight(.semibold))
                 }
-                .buttonStyle(.neonGold)
+                .buttonStyle(.secondary)
                 .help("Costs")
                 .accessibilityLabel("Costs")
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 6)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
 
-            Divider()
+            Divider().overlay(Theme.hairline.opacity(0.12))
 
             if state.sessions.isEmpty {
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     Text("No active Claude Code sessions")
-                        .foregroundStyle(.secondary)
+                        .font(Theme.prose)
+                        .foregroundStyle(Theme.textSecondary)
                     Text("Run `claude` in any terminal — it'll appear here within 3s.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .font(Theme.prose)
+                        .foregroundStyle(Theme.textTertiary)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
+                .padding(.vertical, 32)
             } else {
                 VStack(spacing: 0) {
                     ForEach(groupedSessions, id: \.profile) { group in
                         if showProfileHeaders {
                             ProfileSectionHeader(profile: group.profile, count: group.sessions.count)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 8)
-                                .padding(.bottom, 4)
                         }
                         ForEach(group.sessions) { session in
                             Button {
@@ -153,7 +152,9 @@ struct MenuBarContent: View {
                             }
                             .buttonStyle(.plain)
                             if session.id != group.sessions.last?.id {
-                                Divider().padding(.leading, 36)
+                                Divider()
+                                    .overlay(Theme.hairline.opacity(0.12))
+                                    .padding(.leading, 36)
                             }
                         }
                     }
@@ -161,7 +162,7 @@ struct MenuBarContent: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Divider()
+            Divider().overlay(Theme.hairline.opacity(0.12))
 
             HStack(spacing: 10) {
                 Toggle(isOn: Binding(
@@ -173,12 +174,13 @@ struct MenuBarContent: View {
                     }
                 )) {
                     Text("LAUNCH AT LOGIN")
-                        .font(Theme.chromeCaption)
-                        .tracking(0.8)
-                        .foregroundStyle(Theme.dpChrome.opacity(0.85))
+                        .font(Theme.eyebrowTiny)
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.textSecondary)
                 }
                 .toggleStyle(.switch)
                 .controlSize(.mini)
+                .tint(Theme.accentBlue)
                 Toggle(isOn: Binding(
                     get: { mascotEnabled },
                     set: { newValue in
@@ -187,22 +189,23 @@ struct MenuBarContent: View {
                     }
                 )) {
                     Text("MASCOT")
-                        .font(Theme.chromeCaption)
-                        .tracking(0.8)
-                        .foregroundStyle(Theme.dpChrome.opacity(0.85))
+                        .font(Theme.eyebrowTiny)
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.textSecondary)
                 }
                 .toggleStyle(.switch)
                 .controlSize(.mini)
+                .tint(Theme.accentBlue)
                 Spacer()
                 Button("REFRESH") { Task { await state.refresh() } }
-                    .buttonStyle(.neonCyan)
+                    .buttonStyle(.secondary)
                     .keyboardShortcut("r")
                 Button("QUIT") { NSApp.terminate(nil) }
-                    .buttonStyle(.neonMagenta)
+                    .buttonStyle(.danger)
                     .keyboardShortcut("q")
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
         .task {
             // Re-sync the toggle with the system state on each popover open.
@@ -222,21 +225,22 @@ private struct SessionRow: View {
     @Environment(AppState.self) private var state
     let session: Session
     @State private var confirmingKill = false
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 12) {
             StatusDot(status: session.status)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(session.displayTitle)
-                    .font(.system(.body, design: .rounded).weight(.medium))
-                    .foregroundStyle(.white)
+                    .font(Theme.rowTitle)
+                    .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(session.displaySubtitle.uppercased())
-                    .font(Theme.chromeCaption)
-                    .tracking(0.6)
-                    .foregroundStyle(Theme.dpChrome.opacity(0.7))
+                Text(session.displaySubtitle)
+                    .font(Theme.mono)
+                    .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
+                    .truncationMode(.middle)
             }
             Spacer()
             // StarButton and CopyButton already provide their own
@@ -258,7 +262,7 @@ private struct SessionRow: View {
                 Image(systemName: "play.circle")
                     .font(.body.weight(.semibold))
             }
-            .buttonStyle(.neonCyan)
+            .buttonStyle(.secondary)
             .help("Open a new Terminal and run: claude --resume \(session.id)")
             .accessibilityLabel("Resume session in new Terminal")
             Button {
@@ -267,7 +271,7 @@ private struct SessionRow: View {
                 Image(systemName: "arrow.up.right.square")
                     .font(.body.weight(.semibold))
             }
-            .buttonStyle(.neonCyan)
+            .buttonStyle(.secondary)
             .help("Bring this session's terminal to front")
             .accessibilityLabel("Bring terminal to front")
             Button {
@@ -275,7 +279,7 @@ private struct SessionRow: View {
             } label: {
                 Image(systemName: "stop.circle")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.red.opacity(0.85))
+                    .foregroundStyle(Theme.danger)
             }
             .buttonStyle(.plain)
             .help("Kill this session (terminate PID \(session.pid))")
@@ -285,7 +289,14 @@ private struct SessionRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Theme.hover.opacity(hovering ? 0.06 : 0))
+                .padding(.horizontal, 6)
+        )
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
         .confirmationDialog(
             "Kill this session?",
             isPresented: $confirmingKill,

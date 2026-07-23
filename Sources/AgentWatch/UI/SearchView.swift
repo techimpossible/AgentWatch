@@ -12,32 +12,40 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(Theme.neonMagenta)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
                     .accessibilityHidden(true)
-                TextField("SEARCH INSIDE MESSAGES…", text: $query)
+                TextField("Search inside messages…", text: $query)
                     .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
                     .onSubmit { run() }
                     .accessibilityLabel("Search inside messages")
                 if !query.isEmpty {
                     Button { query = ""; hits = []; lastQuery = ""; capReached = false } label: {
                         Image(systemName: "xmark.circle.fill")
                     }
-                    .buttonStyle(.neonMagenta)
+                    .buttonStyle(.secondary)
                     .accessibilityLabel("Clear search")
                 }
                 Button("SEARCH") { run() }
-                    .buttonStyle(.neonMagenta)
+                    .buttonStyle(.neonCyan)
                     .keyboardShortcut(.return)
                     .disabled(query.trimmingCharacters(in: .whitespaces).count < 2 || loading)
             }
-            .padding(14)
-            .glassEffect(.regular.tint(Theme.neonMagenta.opacity(0.08)), in: RoundedRectangle(cornerRadius: 0))
-
-            Divider()
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(Theme.surfaceRaised.opacity(0.5))
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Theme.hairline.opacity(0.12))
+                    .frame(height: 0.5)
+            }
 
             if loading {
                 ProgressView("Searching…")
+                    .font(Theme.prose)
+                    .tint(Theme.accentBlue)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !lastQuery.isEmpty && hits.isEmpty {
                 ContentUnavailableView(
@@ -58,11 +66,13 @@ struct SearchView: View {
                     HitRow(hit: hit, query: lastQuery)
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
                 // Only shown when scanning stopped early at the cap — never on complete results.
                 if capReached {
                     Text("Showing first \(searchLimit) matches — refine your search")
-                        .font(Theme.chromeCaption)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.eyebrow)
+                        .tracking(0.8)
+                        .foregroundStyle(Theme.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                         .accessibilityLabel("Showing only the first \(searchLimit) matches. Refine your search to narrow results.")
@@ -96,32 +106,39 @@ private struct HitRow: View {
     let query: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 NeonGlassCapsule(label: hit.role, tint: roleColor)
                 NeonGlassCapsule(label: hit.profile, tint: Theme.profileColor(hit.profile))
                 Text(hit.projectName)
-                    .font(.caption.monospaced().weight(.semibold))
-                    .foregroundStyle(Theme.neonCyan)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.textSecondary)
                 Spacer()
                 if let ts = hit.timestamp {
                     Text(ts.formatted(date: .numeric, time: .shortened))
-                        .font(Theme.chromeCaption)
-                        .foregroundStyle(.tertiary)
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textTertiary)
                 }
             }
             Text(highlightedPreview)
-                .font(.system(.caption, design: .monospaced))
+                .font(Theme.approvalDetail)
+                .foregroundStyle(Theme.textPrimary)
                 .lineLimit(3)
                 .textSelection(.enabled)
             HStack(spacing: 8) {
-                Text(hit.sessionId).font(.caption2).foregroundStyle(.tertiary)
-                Text("line \(hit.lineNumber)").font(.caption2).foregroundStyle(.tertiary)
+                Text(hit.sessionId)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.textTertiary)
+                Text("line \(hit.lineNumber)")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textTertiary)
                 Spacer()
                 actions
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
         // Combine the descriptive text into one VoiceOver element; action buttons stay
         // individually focusable via .accessibilityElement(children: .contain).
         .accessibilityElement(children: .contain)
@@ -149,7 +166,7 @@ private struct HitRow: View {
                 Image(systemName: "text.alignleft")
             }
             .help("Open transcript")
-            .buttonStyle(.neonMagenta)
+            .buttonStyle(.secondary)
             .accessibilityLabel("Open transcript")
             .accessibilityHint("Opens the full session transcript in a new window")
 
@@ -178,10 +195,10 @@ private struct HitRow: View {
 
     private var roleColor: Color {
         switch hit.role {
-        case "user": Theme.neonCyan
-        case "assistant": Theme.neonMagenta
-        case "system": Theme.dpChrome
-        default: .gray
+        case "user": Theme.accentBlue
+        case "assistant": Theme.accentGreen
+        case "system": Theme.idle
+        default: Theme.idle
         }
     }
 
@@ -192,8 +209,9 @@ private struct HitRow: View {
             var searchStart = lower.startIndex
             while let range = lower.range(of: query.lowercased(), range: searchStart..<lower.endIndex),
                   let attrRange = Range(range, in: attr) {
-                attr[attrRange].backgroundColor = .yellow.opacity(0.4)
-                attr[attrRange].font = .system(.caption, design: .monospaced).bold()
+                attr[attrRange].backgroundColor = Theme.accentBlue.opacity(0.22)
+                attr[attrRange].foregroundColor = Theme.textPrimary
+                attr[attrRange].font = .system(size: 11, weight: .semibold, design: .monospaced)
                 searchStart = range.upperBound
             }
         }

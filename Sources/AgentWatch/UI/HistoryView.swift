@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HistoryView: View {
+    @Environment(\.colorScheme) private var scheme
     @State private var sessions: [HistoricalSession] = []
     @State private var loading = false
     @State private var filter: String = ""
@@ -9,16 +10,21 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("HISTORY")
-                        .font(Theme.chromeTitle)
-                        .tracking(3.0)
-                        .foregroundStyle(Theme.neonCyan)
-                    Text("\(sessions.count) SESSIONS ACROSS ALL PROJECTS")
-                        .font(Theme.chromeCaption)
-                        .tracking(1.2)
-                        .foregroundStyle(.tertiary)
+                        .font(Theme.titleWindow)
+                        .tracking(0.5)
+                        .foregroundStyle(Theme.textPrimary)
+                    HStack(spacing: 4) {
+                        Text("\(sessions.count)")
+                            .font(Theme.mono)
+                            .foregroundStyle(Theme.textSecondary)
+                        Text("SESSIONS ACROSS ALL PROJECTS")
+                            .font(Theme.eyebrow)
+                            .tracking(1.2)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
                 }
                 Spacer()
                 Button {
@@ -26,31 +32,42 @@ struct HistoryView: View {
                 } label: {
                     Image(systemName: favoritesOnly ? "star.fill" : "star")
                 }
-                .buttonStyle(.neonGold)
+                .buttonStyle(favoritesOnly ? .neonGold : .secondary)
                 .help(favoritesOnly ? "Show all sessions" : "Show favourites only")
                 .accessibilityLabel("Favourites only")
                 .accessibilityValue(favoritesOnly ? "On" : "Off")
+
                 TextField("FILTER SESSIONS…", text: $filter)
                     .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
-                    .padding(.horizontal, 10)
+                    .font(Theme.mono)
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .glassEffect(.regular.tint(Theme.neonCyan.opacity(0.10)), in: Capsule())
+                    .glassEffect(.regular.tint(Theme.idle.opacity(0.08)), in: Capsule())
+                    .overlay(
+                        Capsule().strokeBorder(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10), lineWidth: 0.5)
+                    )
                     .frame(width: 220)
+
                 Button {
                     reload()
                 } label: {
                     Label("REFRESH", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.neonCyan)
+                .buttonStyle(.secondary)
                 .disabled(loading)
             }
-            .padding(16)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
 
             Divider()
+                .overlay(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
 
             if loading {
                 ProgressView("Scanning…")
+                    .font(Theme.prose)
+                    .tint(Theme.accentBlue)
+                    .foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if filteredSessions.isEmpty {
                 ContentUnavailableView(
@@ -76,6 +93,7 @@ struct HistoryView: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             }
         }
         .frame(minWidth: 760, minHeight: 540)
@@ -131,35 +149,44 @@ struct HistoryView: View {
 
 private struct HistoryRow: View {
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.colorScheme) private var scheme
     let session: HistoricalSession
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text(session.projectName)
-                    .font(.callout.bold())
-                Text("•")
-                    .foregroundStyle(.tertiary)
-                Text(session.lastModified.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("• \(session.messageCount) lines")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                Spacer()
-                actions
+        HStack(alignment: .top, spacing: 12) {
+            // Profile identity spine
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                .fill(Theme.profileColor(session.profile))
+                .frame(width: 2)
+                .padding(.vertical, 6)
+                .opacity(0.9)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(session.projectName)
+                        .font(Theme.rowTitle)
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(session.lastModified.formatted(date: .abbreviated, time: .shortened))
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textSecondary)
+                    Text("\(session.messageCount) lines")
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textTertiary)
+                    Spacer()
+                    actions
+                }
+                if let preview = session.firstMessage {
+                    Text(preview)
+                        .font(Theme.prose)
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(2)
+                }
+                Text(session.sessionId)
+                    .font(Theme.mono)
+                    .foregroundStyle(Theme.textTertiary)
             }
-            if let preview = session.firstMessage {
-                Text(preview)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            Text(session.sessionId)
-                .font(.caption2.monospaced())
-                .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 
     private var actions: some View {
@@ -176,7 +203,7 @@ private struct HistoryRow: View {
                     Image(systemName: "play.circle")
                 }
                 .help("Open Terminal and run: claude --resume \(session.sessionId)")
-                .buttonStyle(.neonCyan)
+                .buttonStyle(.secondary)
                 .accessibilityLabel("Resume in Terminal")
 
                 CopyButton(
@@ -196,7 +223,7 @@ private struct HistoryRow: View {
                     Image(systemName: "folder")
                 }
                 .help("Reveal \(cwd) in Finder")
-                .buttonStyle(.neonCyan)
+                .buttonStyle(.secondary)
                 .accessibilityLabel("Reveal in Finder")
             }
 
@@ -208,7 +235,7 @@ private struct HistoryRow: View {
                 Image(systemName: "text.alignleft")
             }
             .help("Open transcript")
-            .buttonStyle(.neonMagenta)
+            .buttonStyle(.secondary)
             .accessibilityLabel("Open transcript")
         }
     }

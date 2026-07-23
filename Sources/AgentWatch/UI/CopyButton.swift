@@ -6,9 +6,10 @@ import SwiftUI
 struct CopyButton: View {
     let text: String
     var help: String = "Copy"
-    var tint: Color = Theme.neonCyan
+    var tint: Color = Theme.textSecondary        // neutral row/toolbar icon
     var icon: String = "doc.on.doc"
     @State private var copied = false
+    @State private var hovering = false
 
     var body: some View {
         Button {
@@ -23,12 +24,18 @@ struct CopyButton: View {
             }
         } label: {
             Image(systemName: copied ? "checkmark" : icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(copied ? .green : tint.opacity(0.85))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                // green = done; otherwise quiet neutral, lifting to primary on hover.
+                .foregroundStyle(copied ? Theme.accentGreen : (hovering ? Theme.textPrimary : tint))
                 .contentTransition(.symbolEffect(.replace))
+                .frame(width: 22, height: 22)
+                .background(
+                    Circle().fill(Theme.hover.opacity(hovering ? 0.10 : 0.0))
+                )
         }
         .buttonStyle(.plain)
         .disabled(text.isEmpty)
+        .onHover { hovering = $0 }
         .help(text.isEmpty ? "Nothing to copy" : help)
         .accessibilityLabel(text.isEmpty ? "Nothing to copy" : help)
         .accessibilityValue(copied ? "Copied" : "")

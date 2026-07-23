@@ -5,6 +5,8 @@ import SwiftUI
 struct ApprovalView: View {
     var broker: ApprovalBroker
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         Group {
             if let req = broker.current {
@@ -22,66 +24,84 @@ struct ApprovalView: View {
 
     private func card(_ req: ApprovalRequest) -> some View {
         let prof = profile(for: req.sessionId)
-        return VStack(alignment: .leading, spacing: 10) {
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "hand.raised.fill")
-                    .foregroundStyle(Theme.dpGold)
+                    .foregroundStyle(Theme.accent)
                 Text("PERMISSION")
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.dpChrome.opacity(0.85))
+                    .font(Theme.eyebrow)
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.textSecondary)
                 Spacer()
                 if let prof {
+                    let tint = Theme.profileColor(prof)
                     Text(prof.uppercased())
-                        .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Capsule().fill(Color.black.opacity(0.6))
-                            .overlay(Capsule().strokeBorder(Theme.profileColor(prof).opacity(0.8), lineWidth: 1)))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .glassEffect(.regular.tint(tint.opacity(0.16)), in: Capsule())
+                        .overlay(Capsule().strokeBorder(tint.opacity(0.45), lineWidth: 0.75))
                 }
                 if broker.pending.count > 1 {
                     Text("+\(broker.pending.count - 1)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Theme.dpChrome.opacity(0.6))
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textTertiary)
                 }
             }
 
             Text(req.headline)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
+                .font(Theme.titleCard)
+                .foregroundStyle(Theme.textPrimary)
                 .lineLimit(2)
 
             ScrollView(.vertical) {
                 Text(req.detail.isEmpty ? "(no details)" : req.detail)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Theme.dpChrome.opacity(0.9))
+                    .font(Theme.approvalDetail)
+                    .foregroundStyle(Theme.textSecondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(10)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Theme.surfaceSunken)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10), lineWidth: 0.5)
+            )
 
             HStack(spacing: 8) {
                 Button("Deny")            { broker.resolve(req, decision: "deny") }
-                    .tint(.red)
+                    .buttonStyle(.bordered)
+                    .tint(Theme.danger)
                 Button("Ask in terminal") { broker.resolve(req, decision: "ask") }
+                    .buttonStyle(.bordered)
                 Spacer()
                 Button("Allow")           { broker.resolve(req, decision: "allow") }
-                    .tint(Theme.neonCyan)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
                     .keyboardShortcut(.defaultAction)
             }
-            .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black)
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Theme.glowOrange.opacity(0.7), lineWidth: 1.5))
-                .shadow(color: Theme.glowOrange.opacity(0.35), radius: 16)
+        .background(shape.fill(Theme.surfaceRaised))
+        .background(.thinMaterial, in: shape)
+        .glassEffect(.regular.tint(Theme.accent.opacity(0.12)), in: shape)
+        .overlay(
+            shape.strokeBorder(
+                LinearGradient(colors: [Theme.specularTop.opacity(scheme == .dark ? 0.30 : 0.55),
+                                        Theme.specularBottom.opacity(scheme == .dark ? 0.05 : 0.06)],
+                               startPoint: .top, endPoint: .bottom),
+                lineWidth: 0.75)
         )
+        .overlay(shape.strokeBorder(Theme.accent.opacity(0.6), lineWidth: 1))
+        .shadow(color: .black.opacity(scheme == .dark ? 0.55 : 0.18), radius: 22, y: 10)
+        .shadow(color: Theme.accent.opacity(0.30), radius: 16, y: 0)
         .padding(6)
     }
 }

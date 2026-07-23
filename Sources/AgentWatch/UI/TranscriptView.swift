@@ -32,15 +32,16 @@ struct TranscriptView: View {
                 ContentUnavailableView("Loading…", systemImage: "ellipsis")
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         ForEach(entries) { entry in
                             EntryView(entry: entry)
                             Divider()
                                 .overlay(Theme.hairline.opacity(0.12))
-                                .padding(.leading, 28)
+                                .padding(.leading, 14)
                         }
                     }
-                    .padding(20)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 16)
                 }
             }
         }
@@ -89,7 +90,8 @@ struct TranscriptView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 16)
     }
 
     private var headerTitle: String {
@@ -167,6 +169,20 @@ private struct EntryView: View {
                 BlockView(block: block)
             }
         }
+        .padding(12)
+        .background(
+            // User turns read as a quiet raised inset; assistant/system stay on the
+            // base surface. Distinction is by surface, not a loud color.
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(entry.role == .user ? Theme.surfaceRaised : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(
+                    entry.role == .user ? Theme.hairline.opacity(0.12) : Color.clear,
+                    lineWidth: 0.5
+                )
+        )
     }
 
     /// Concatenate the entry's content blocks into a single string for the clipboard.
@@ -233,18 +249,20 @@ private struct BlockView: View {
         switch block {
         case .text(let s):
             Text(s)
-                .font(.system(.body, design: .serif))
+                .font(Theme.prose)
+                .lineSpacing(4)
                 .foregroundStyle(Theme.textPrimary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .thinking(let s):
             DisclosureGroup {
                 Text(s)
-                    .font(.system(.body, design: .serif))
+                    .font(Theme.prose)
+                    .lineSpacing(4)
                     .foregroundStyle(Theme.textSecondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
+                    .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(Theme.surfaceSunken)
@@ -293,10 +311,11 @@ private struct BlockView: View {
     private func payloadWell(_ content: String, tint: Color) -> some View {
         Text(content)
             .font(Theme.approvalDetail)
+            .lineSpacing(2)
             .foregroundStyle(Theme.textSecondary)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
+            .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Theme.surfaceSunken)

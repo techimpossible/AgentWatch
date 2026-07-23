@@ -20,6 +20,9 @@ struct StarButton: View {
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundStyle(isStarred ? Self.starTint : Theme.textTertiary.opacity(0.6))
                 .contentTransition(.symbolEffect(.replace))
+                // Match CopyButton's tap target so row-trailing controls align
+                // and neither state (star vs star.fill) shifts layout.
+                .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
         .help(isStarred ? "Unstar this session" : "Star this session")

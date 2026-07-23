@@ -46,7 +46,7 @@ struct CostsView: View {
                 }
                 .pickerStyle(.segmented)
                 .tint(Theme.accentBlue)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 12)
 
                 ScrollView {
@@ -113,7 +113,7 @@ struct CostsView: View {
             .accessibilityLabel("Cost date range")
             Spacer()
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .onChange(of: range) { _, _ in reload() }
     }
@@ -139,34 +139,32 @@ struct CostsView: View {
     }
 
     private func metric(_ label: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(Theme.eyebrow)
-                .tracking(1.2)
-                .foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 4) {
+            // Caption row: tiny semantic dot inline with the eyebrow — never a coral
+            // fill on routine metrics.
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(tint)
+                    .frame(width: 5, height: 5)
+                Text(label)
+                    .font(Theme.eyebrow)
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.textSecondary)
+            }
             Text(value)
-                .font(.system(.callout, design: .monospaced).weight(.semibold))
-                .monospacedDigit()
+                .font(Theme.monoStrong)
                 .foregroundStyle(Theme.textPrimary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Theme.surfaceRaised)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Theme.hairline.opacity(0.10), lineWidth: 0.5)
+                .strokeBorder(Theme.hairline.opacity(0.12), lineWidth: 0.5)
         )
-        .overlay(alignment: .topLeading) {
-            // Tiny semantic dot — never a coral fill on routine metrics.
-            Circle()
-                .fill(tint)
-                .frame(width: 5, height: 5)
-                .padding(10)
-        }
         .shadow(color: .black.opacity(scheme == .dark ? 0.28 : 0.06), radius: 6, y: 2)
     }
 
@@ -180,7 +178,7 @@ struct CostsView: View {
                 row(label: pair.0, cost: pair.1, fraction: pair.1 / max,
                     tint: colorByProfile ? Theme.profileColor(profileToken(pair.0)) : nil)
                 hairlineDivider
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 14)
             }
         }
     }
@@ -207,8 +205,8 @@ struct CostsView: View {
                 .font(Theme.monoStrong)
                 .foregroundStyle(Theme.textPrimary)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
         .background(alignment: .leading) {
             // Single quiet left-anchored proportion fill.
             GeometryReader { geo in

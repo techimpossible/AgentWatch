@@ -26,14 +26,15 @@ struct ApprovalView: View {
         let prof = profile(for: req.sessionId)
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.accent)
                 Text("PERMISSION")
                     .font(Theme.eyebrow)
                     .tracking(1.2)
                     .foregroundStyle(Theme.textSecondary)
-                Spacer()
+                Spacer(minLength: 8)
                 if let prof {
                     let tint = Theme.profileColor(prof)
                     Text(prof.uppercased())
@@ -64,7 +65,7 @@ struct ApprovalView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(10)
+            .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Theme.surfaceSunken)
@@ -80,7 +81,7 @@ struct ApprovalView: View {
                     .tint(Theme.danger)
                 Button("Ask in terminal") { broker.resolve(req, decision: "ask") }
                     .buttonStyle(.bordered)
-                Spacer()
+                Spacer(minLength: 8)
                 Button("Allow")           { broker.resolve(req, decision: "allow") }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)

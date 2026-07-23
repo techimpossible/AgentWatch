@@ -13,6 +13,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
     private let rightClickMenu: NSMenu
     /// Submenu of selectable mascots — rebuilt each time it opens (see menuNeedsUpdate).
     private let mascotMenu = NSMenu(title: "Mascot")
+    /// Submenu to enable/disable in-app tool approvals per profile — rebuilt on open.
+    private let approvalsMenu = NSMenu(title: "Approvals")
 
     /// Holds the @Observable subscription so the status icon refreshes when state changes.
     private var observationCancellable: Task<Void, Never>?
@@ -130,6 +132,13 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
 
         m.addItem(.separator())
 
+        let approvals = NSMenuItem(title: "Approvals (beta)", action: nil, keyEquivalent: "")
+        approvalsMenu.delegate = self       // rebuilt on open to reflect install state
+        approvals.submenu = approvalsMenu
+        m.addItem(approvals)
+
+        m.addItem(.separator())
+
         let loginItem = NSMenuItem(title: "Launch at login", action: #selector(menuToggleLoginItem), keyEquivalent: "")
         loginItem.target = self
         loginItem.state = LoginItem.isEnabled ? .on : .off
@@ -166,10 +175,13 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
 
     // MARK: - Mascot submenu
 
-    /// Rebuild the mascot submenu each time it opens so freshly-added mascots and
-    /// the current selection are always reflected.
+    /// Rebuild whichever submenu is opening so it always reflects current state.
     func menuNeedsUpdate(_ menu: NSMenu) {
-        guard menu === mascotMenu else { return }
+        if menu === mascotMenu { rebuildMascotMenu(menu) }
+        else if menu === approvalsMenu { rebuildApprovalsMenu(menu) }
+    }
+
+    private func rebuildMascotMenu(_ menu: NSMenu) {
         menu.removeAllItems()
         let selected = MascotCatalog.shared.selectionID
 
@@ -232,6 +244,46 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
 
     @objc private func menuOpenMascotsFolder() {
         NSWorkspace.shared.open(MascotCatalog.shared.userMascotsDir)
+    }
+
+    // MARK: - Approvals submenu
+
+    private func rebuildApprovalsMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let header = NSMenuItem(title: "Approve tool calls in AgentWatch", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+        menu.addItem(.separator())
+
+        let profiles = Array(Set(ClaudeHome.roots.map { $0.profile })).sorted()
+        if profiles.isEmpty {
+            let none = NSMenuItem(title: "No profiles found", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            menu.addItem(none)
+        } else {
+            for profile in profiles {
+                let mi = NSMenuItem(title: profile, action: #selector(menuToggleApproval(_:)), keyEquivalent: "")
+                mi.target = self
+                mi.representedObject = profile
+                mi.state = ApprovalHookInstaller.isInstalled(profile: profile) ? .on : .off
+                menu.addItem(mi)
+            }
+        }
+
+        menu.addItem(.separator())
+        let note = NSMenuItem(title: "Installs a PreToolUse hook. Restart the Claude session to take effect.",
+                              action: nil, keyEquivalent: "")
+        note.isEnabled = false
+        menu.addItem(note)
+    }
+
+    @objc private func menuToggleApproval(_ sender: NSMenuItem) {
+        guard let profile = sender.representedObject as? String else { return }
+        if ApprovalHookInstaller.isInstalled(profile: profile) {
+            ApprovalHookInstaller.uninstall(profile: profile)
+        } else {
+            ApprovalHookInstaller.install(profile: profile)
+        }
     }
     @objc private func menuToggleLoginItem(_ sender: NSMenuItem) {
         let now = LoginItem.isEnabled

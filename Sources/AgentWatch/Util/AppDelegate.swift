@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusController: StatusItemController?
     private var notchController: NotchController?
     private var mascotController: MascotOverlayController?
+    private var approvalController: ApprovalPanelController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         DebugLog.write("AppDelegate didFinishLaunching")
@@ -26,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController = sc
         notchController = NotchController(state: AppState.shared, statusController: sc)
         mascotController = MascotOverlayController()
+        approvalController = ApprovalPanelController()
     }
 
     /// Handle incoming `agentwatch://` URLs (clicked from Asana, Notes, etc.).
@@ -33,6 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for url in urls {
             TerminalLauncher.handleURL(url)
         }
+    }
+
+    /// Remove the approvals `.listening` marker promptly on quit so hook shims
+    /// defer to the terminal immediately (the stale-marker check is only a backstop).
+    func applicationWillTerminate(_ notification: Notification) {
+        ApprovalBroker.shared.stop()
     }
 
     /// When the last window closes, drop back to accessory mode so the Dock icon disappears.

@@ -49,6 +49,13 @@ if [ -d "$ROOT/Resources/Mascots" ]; then
     mkdir -p "$APP/Contents/Resources/Mascots"
     cp "$ROOT/Resources/Mascots/"*.png "$APP/Contents/Resources/Mascots/" 2>/dev/null || true
 fi
+# Approval hook shim — staged to Application Support at runtime, referenced from
+# the bundle here.
+if [ -d "$ROOT/Resources/hooks" ]; then
+    mkdir -p "$APP/Contents/Resources/hooks"
+    cp "$ROOT/Resources/hooks/"* "$APP/Contents/Resources/hooks/" 2>/dev/null || true
+    chmod +x "$APP/Contents/Resources/hooks/"*.sh 2>/dev/null || true
+fi
 
 echo "==> ad-hoc codesign"
 xattr -cr "$APP"

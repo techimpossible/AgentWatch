@@ -2,14 +2,17 @@ import AppKit
 import Combine
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Owns the menu-bar status item for AgentWatch.
 /// Left-click toggles the SwiftUI popover. Right-click shows an NSMenu with Quit etc.
 @MainActor
-final class StatusItemController: NSObject, NSPopoverDelegate {
+final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private let popover: NSPopover
     private let rightClickMenu: NSMenu
+    /// Submenu of selectable mascots — rebuilt each time it opens (see menuNeedsUpdate).
+    private let mascotMenu = NSMenu(title: "Mascot")
 
     /// Holds the @Observable subscription so the status icon refreshes when state changes.
     private var observationCancellable: Task<Void, Never>?
@@ -116,6 +119,11 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
         m.addItem(.separator())
 
+        let mascot = NSMenuItem(title: "Mascot", action: nil, keyEquivalent: "")
+        mascotMenu.delegate = self          // rebuilt on open so new uploads appear
+        mascot.submenu = mascotMenu
+        m.addItem(mascot)
+
         let demo = NSMenuItem(title: "Run mascot demo 🎉", action: #selector(menuMascotDemo), keyEquivalent: "")
         demo.target = self
         m.addItem(demo)
@@ -154,6 +162,76 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         // Showcase the mascot without waiting for a real session event:
         // a "finished" walk-by, which also rains confetti.
         MascotOverlayController.shared?.show(reason: .finished, profile: "demo")
+    }
+
+    // MARK: - Mascot submenu
+
+    /// Rebuild the mascot submenu each time it opens so freshly-added mascots and
+    /// the current selection are always reflected.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === mascotMenu else { return }
+        menu.removeAllItems()
+        let selected = MascotCatalog.shared.selectionID
+
+        let random = NSMenuItem(title: "Random (all)", action: #selector(menuSelectMascot(_:)), keyEquivalent: "")
+        random.target = self
+        random.representedObject = nil          // nil => random rotation
+        random.state = (selected == nil) ? .on : .off
+        menu.addItem(random)
+        menu.addItem(.separator())
+
+        for item in MascotCatalog.shared.items() {
+            let mi = NSMenuItem(title: item.name, action: #selector(menuSelectMascot(_:)), keyEquivalent: "")
+            mi.target = self
+            mi.representedObject = item.id
+            mi.state = (selected == item.id) ? .on : .off
+            if case .image(let url) = item.source, let img = NSImage(contentsOf: url) {
+                let thumb = NSImage(size: NSSize(width: 18, height: 18))
+                thumb.lockFocus()
+                img.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
+                thumb.unlockFocus()
+                mi.image = thumb
+            }
+            menu.addItem(mi)
+        }
+
+        menu.addItem(.separator())
+        let add = NSMenuItem(title: "Add Mascot from File…", action: #selector(menuAddMascot), keyEquivalent: "")
+        add.target = self
+        menu.addItem(add)
+        let openDir = NSMenuItem(title: "Open Mascots Folder…", action: #selector(menuOpenMascotsFolder), keyEquivalent: "")
+        openDir.target = self
+        menu.addItem(openDir)
+    }
+
+    @objc private func menuSelectMascot(_ sender: NSMenuItem) {
+        MascotCatalog.shared.selectionID = sender.representedObject as? String
+        // Immediately show the pick so the choice is visible.
+        MascotOverlayController.shared?.show(reason: .finished, profile: "demo")
+    }
+
+    @objc private func menuAddMascot() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .tiff, .image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.prompt = "Add Mascot"
+        panel.message = "Choose an image to use as a mascot. A square, transparent PNG works best."
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if let id = MascotCatalog.shared.addMascot(from: url) {
+            MascotCatalog.shared.selectionID = id     // select the freshly added one
+            MascotOverlayController.shared?.show(reason: .finished, profile: "demo")
+        } else {
+            let alert = NSAlert()
+            alert.messageText = "Couldn't add that image"
+            alert.informativeText = "AgentWatch couldn't read that file as an image. Try a PNG."
+            alert.runModal()
+        }
+    }
+
+    @objc private func menuOpenMascotsFolder() {
+        NSWorkspace.shared.open(MascotCatalog.shared.userMascotsDir)
     }
     @objc private func menuToggleLoginItem(_ sender: NSMenuItem) {
         let now = LoginItem.isEnabled

@@ -36,28 +36,10 @@ struct MascotView: View {
     var onComplete: () -> Void = {}
     var onBurst: () -> Void = {}   // fired when the user pops it (for confetti)
 
-    /// Built-in drawn characters (no assets needed).
-    enum DrawnKind: CaseIterable { case sponge, robot, blob }
-
-    /// One appearance is either a drawn character or a bundled image. Any PNG
-    /// dropped into Resources/Mascots/ becomes an image persona automatically —
-    /// no code change needed (see `roster`).
-    enum Persona { case drawn(DrawnKind); case image(NSImage) }
-
-    /// Every available persona: the built-in drawn ones, plus one per PNG found
-    /// in the app bundle's Mascots/ folder. Built once. To add a mascot, drop a
-    /// PNG into Resources/Mascots/ and rebuild — it joins the rotation.
-    private static let roster: [Persona] = {
-        var list: [Persona] = DrawnKind.allCases.map { .drawn($0) }
-        let urls = Bundle.main.urls(forResourcesWithExtension: "png", subdirectory: "Mascots") ?? []
-        for url in urls.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
-            if let img = NSImage(contentsOf: url) { list.append(.image(img)) }
-        }
-        return list
-    }()
-
-    /// Which persona walks this time — chosen at random per appearance.
-    @State private var persona: Persona = MascotView.roster.randomElement() ?? .drawn(.sponge)
+    /// Which persona walks this time — the selected default, else a random pick
+    /// from the catalog (drawn built-ins + bundled + user-uploaded images).
+    /// `DrawnKind` / `MascotPersona` live in MascotCatalog.
+    @State private var persona: MascotPersona = MascotCatalog.shared.pick()
 
     /// The drawn kind for this appearance, or nil when it's an image persona.
     private var drawnKind: DrawnKind? {

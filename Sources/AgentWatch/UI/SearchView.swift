@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SearchView: View {
+    @Environment(\.colorScheme) private var scheme
     @State private var query: String = ""
     @State private var hits: [SearchHit] = []
     @State private var loading = false
@@ -33,12 +34,12 @@ struct SearchView: View {
                     .keyboardShortcut(.return)
                     .disabled(query.trimmingCharacters(in: .whitespaces).count < 2 || loading)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 14)
             .padding(.vertical, 14)
             .background(Theme.surfaceRaised.opacity(0.5))
             .overlay(alignment: .bottom) {
                 Rectangle()
-                    .fill(Theme.hairline.opacity(0.12))
+                    .fill(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
                     .frame(height: 0.5)
             }
 
@@ -46,6 +47,7 @@ struct SearchView: View {
                 ProgressView("Searching…")
                     .font(Theme.prose)
                     .tint(Theme.accentBlue)
+                    .foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !lastQuery.isEmpty && hits.isEmpty {
                 ContentUnavailableView(
@@ -64,6 +66,8 @@ struct SearchView: View {
             } else {
                 List(hits) { hit in
                     HitRow(hit: hit, query: lastQuery)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14))
+                        .listRowSeparatorTint(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
@@ -105,40 +109,51 @@ private struct HitRow: View {
     let hit: SearchHit
     let query: String
 
+    /// Shared footer metadata font so session id and line number read as one mono column.
+    private let footerMono = Font.system(size: 10, weight: .medium, design: .monospaced)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 NeonGlassCapsule(label: hit.role, tint: roleColor)
                 NeonGlassCapsule(label: hit.profile, tint: Theme.profileColor(hit.profile))
                 Text(hit.projectName)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(Theme.mono)
                     .foregroundStyle(Theme.textSecondary)
-                Spacer()
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 8)
                 if let ts = hit.timestamp {
                     Text(ts.formatted(date: .numeric, time: .shortened))
                         .font(Theme.mono)
                         .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                        .frame(minWidth: 112, alignment: .trailing)
                 }
             }
             Text(highlightedPreview)
                 .font(Theme.approvalDetail)
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(3)
+                .truncationMode(.tail)
                 .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Text(hit.sessionId)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(footerMono)
                     .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Text("line \(hit.lineNumber)")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(footerMono)
                     .monospacedDigit()
                     .foregroundStyle(Theme.textTertiary)
-                Spacer()
+                    .layoutPriority(1)
+                Spacer(minLength: 8)
                 actions
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
         // Combine the descriptive text into one VoiceOver element; action buttons stay
         // individually focusable via .accessibilityElement(children: .contain).
         .accessibilityElement(children: .contain)

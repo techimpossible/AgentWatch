@@ -10,23 +10,23 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("HISTORY")
                         .font(Theme.titleWindow)
                         .tracking(0.5)
                         .foregroundStyle(Theme.textPrimary)
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Text("\(sessions.count)")
                             .font(Theme.mono)
                             .foregroundStyle(Theme.textSecondary)
                         Text("SESSIONS ACROSS ALL PROJECTS")
                             .font(Theme.eyebrow)
                             .tracking(1.2)
-                            .foregroundStyle(Theme.textSecondary)
+                            .foregroundStyle(Theme.textTertiary)
                     }
                 }
-                Spacer()
+                Spacer(minLength: 12)
                 Button {
                     favoritesOnly.toggle()
                 } label: {
@@ -57,8 +57,9 @@ struct HistoryView: View {
                 .buttonStyle(.secondary)
                 .disabled(loading)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
 
             Divider()
                 .overlay(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
@@ -74,6 +75,7 @@ struct HistoryView: View {
                     sessions.isEmpty ? "No past sessions" : "No matches",
                     systemImage: "clock.arrow.circlepath"
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
                     if groupedSessions.count > 1 {
@@ -81,6 +83,8 @@ struct HistoryView: View {
                             Section {
                                 ForEach(group.sessions) { session in
                                     HistoryRow(session: session)
+                                        .listRowInsets(EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14))
+                                        .listRowSeparatorTint(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
                                 }
                             } header: {
                                 ProfileSectionHeader(profile: group.profile, count: group.sessions.count)
@@ -89,6 +93,8 @@ struct HistoryView: View {
                     } else {
                         ForEach(filteredSessions) { session in
                             HistoryRow(session: session)
+                                .listRowInsets(EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14))
+                                .listRowSeparatorTint(Theme.hairline.opacity(scheme == .dark ? 0.12 : 0.10))
                         }
                     }
                 }
@@ -158,35 +164,51 @@ private struct HistoryRow: View {
             RoundedRectangle(cornerRadius: 1, style: .continuous)
                 .fill(Theme.profileColor(session.profile))
                 .frame(width: 2)
-                .padding(.vertical, 6)
+                .padding(.vertical, 2)
                 .opacity(0.9)
 
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+                // Title + timestamp column (timestamp stays pinned right; title flexes).
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(session.projectName)
                         .font(Theme.rowTitle)
                         .foregroundStyle(Theme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 8)
                     Text(session.lastModified.formatted(date: .abbreviated, time: .shortened))
                         .font(Theme.mono)
                         .foregroundStyle(Theme.textSecondary)
-                    Text("\(session.messageCount) lines")
-                        .font(Theme.mono)
-                        .foregroundStyle(Theme.textTertiary)
-                    Spacer()
-                    actions
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                        .frame(minWidth: 130, alignment: .trailing)
                 }
+
                 if let preview = session.firstMessage {
                     Text(preview)
                         .font(Theme.prose)
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(2)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(session.sessionId)
-                    .font(Theme.mono)
-                    .foregroundStyle(Theme.textTertiary)
+
+                // Footer metadata + actions (actions stay pinned right).
+                HStack(spacing: 8) {
+                    Text(session.sessionId)
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text("\(session.messageCount) lines")
+                        .font(Theme.mono)
+                        .foregroundStyle(Theme.textTertiary)
+                        .layoutPriority(1)
+                    Spacer(minLength: 8)
+                    actions
+                }
             }
         }
-        .padding(.vertical, 8)
     }
 
     private var actions: some View {

@@ -28,6 +28,10 @@ struct NotchView: View {
         NSScreen.notchedScreen()?.safeAreaInsets.top ?? 28
     }
 
+    /// Shared horizontal inset for every stage's content, so the collapsed pill,
+    /// preview rows and approval card all read off the same left/right gutter.
+    private var contentInset: CGFloat { 14 }
+
     /// Window outline per stage: a flat-top notch silhouette while collapsed /
     /// preview (mates with the physical notch), but a fully rounded rectangle
     /// when the big panel is unfolded so the glow wraps all the way around.
@@ -83,7 +87,7 @@ struct NotchView: View {
             case .collapsed:
                 collapsedContent.padding(.horizontal, 12).padding(.vertical, 4)
             case .preview:
-                expandedContent.padding(.horizontal, 14).padding(.vertical, 12)
+                expandedContent.padding(.horizontal, contentInset).padding(.vertical, 12)
             case .active:
                 activePanel
             case .approval:
@@ -128,7 +132,7 @@ struct NotchView: View {
         } else if topStatus == .working {
             panelShape.stroke(Theme.accentBlue.opacity(0.35), lineWidth: 1)
         } else {
-            panelShape.stroke(Theme.hairlineStrong.opacity(0.16), lineWidth: 0.5)
+            panelShape.stroke(Theme.hairline.opacity(0.12), lineWidth: 0.5)
         }
     }
 
@@ -161,11 +165,12 @@ struct NotchView: View {
     // MARK: - Collapsed (just below the notch)
 
     private var collapsedContent: some View {
+        // Dot + count travel together as one centered group (both axes).
         HStack(spacing: 6) {
             // idle = mid gray (no halo) · working = blue · needsInput = coral.
             Circle()
                 .fill(statusTint)
-                .frame(width: 7, height: 7)
+                .frame(width: 8, height: 8)
                 .opacity(topStatus == .idle ? 0.55 : (pulse ? 1.0 : 0.6))
 
             if state.sessions.isEmpty {
@@ -182,12 +187,13 @@ struct NotchView: View {
                 // needs-input, keeping the pill quiet.
             }
         }
+        .fixedSize()
     }
 
     // MARK: - Expanded (full session preview on hover)
 
     private var expandedContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Text("AGENTWATCH")
                     .font(Theme.eyebrowTiny)
@@ -234,10 +240,10 @@ struct NotchView: View {
 
     @ViewBuilder private var approvalContent: some View {
         if let req = approval {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "hand.raised.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Theme.accent)
                     Text("PERMISSION")
                         .font(Theme.eyebrow)
@@ -250,7 +256,7 @@ struct NotchView: View {
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .tracking(0.5)
                             .foregroundStyle(Theme.profileColor(prof))
-                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .padding(.horizontal, 8).padding(.vertical, 2)
                             .glassEffect(.regular.tint(Theme.profileColor(prof).opacity(0.16)), in: Capsule())
                             .overlay(Capsule().strokeBorder(Theme.profileColor(prof).opacity(0.45), lineWidth: 0.75))
                     }
@@ -274,10 +280,10 @@ struct NotchView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(9)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.surfaceSunken))
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.surfaceSunken))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(Theme.hairline.opacity(0.12), lineWidth: 0.5)
                 )
 
@@ -294,7 +300,7 @@ struct NotchView: View {
                     }
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, contentInset)
             .padding(.top, menuBarInset + 8)   // clear the camera housing
             .padding(.bottom, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -304,12 +310,15 @@ struct NotchView: View {
     /// A tap-gesture "button" (not SwiftUI Button) so it works inside the notch's
     /// non-key borderless window, matching how the notch already handles taps.
     /// `prominent` = filled (coral CTA / danger); otherwise neutral glass.
+    /// Every button shares one label font + inset so all three are the same
+    /// height and rest on a single baseline.
     private func approvalButton(_ label: String, tint: Color, prominent: Bool = false,
                                 action: @escaping () -> Void) -> some View {
         Text(label)
             .font(.system(size: 12, weight: .bold, design: .rounded))
+            .lineLimit(1)
             .foregroundStyle(prominent ? Theme.onAccent : tint)
-            .padding(.horizontal, 13).padding(.vertical, 7)
+            .padding(.horizontal, 12).padding(.vertical, 6)
             .glassEffect(.regular.tint(prominent ? tint.opacity(0.88) : tint.opacity(0.12)), in: Capsule())
             .overlay(
                 Capsule().strokeBorder(
@@ -330,13 +339,14 @@ struct NotchView: View {
         HStack(spacing: 8) {
             Circle()
                 .fill(Theme.statusColor(session.status))
-                .frame(width: 6, height: 6)
+                .frame(width: 8, height: 8)
             Text(session.displayTitle)
                 .font(Theme.rowTitle)
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Spacer()
+            Spacer(minLength: 8)
+            // Trailing meta — mono, right-aligned, never clipped by a long title.
             HStack(spacing: 8) {
                 Label(session.elapsedString, systemImage: "clock")
                     .font(Theme.mono)
@@ -346,6 +356,7 @@ struct NotchView: View {
                     .foregroundStyle(Theme.textSecondary)
             }
             .labelStyle(NotchInlineLabelStyle())
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 }
@@ -361,7 +372,7 @@ private struct ActiveContentHeightKey: PreferenceKey {
 /// Tighter Label rendering — small icon, then text — for the cramped notch rows.
 private struct NotchInlineLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             configuration.icon
                 .imageScale(.small)
             configuration.title

@@ -81,6 +81,7 @@ struct MenuBarContent: View {
                 Text("\(state.sessions.count) ACTIVE")
                     .font(Theme.eyebrow)
                     .tracking(1.2)
+                    .monospacedDigit()
                     .foregroundStyle(Theme.textTertiary)
                 Spacer()
                 Button {
@@ -89,7 +90,7 @@ struct MenuBarContent: View {
                     openWindow(id: "history")
                 } label: {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.body.weight(.semibold))
+                        .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.secondary)
                 .help("History")
@@ -100,7 +101,7 @@ struct MenuBarContent: View {
                     openWindow(id: "search")
                 } label: {
                     Image(systemName: "magnifyingglass")
-                        .font(.body.weight(.semibold))
+                        .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.secondary)
                 .help("Search")
@@ -111,14 +112,14 @@ struct MenuBarContent: View {
                     openWindow(id: "costs")
                 } label: {
                     Image(systemName: "dollarsign.circle")
-                        .font(.body.weight(.semibold))
+                        .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.secondary)
                 .help("Costs")
                 .accessibilityLabel("Costs")
             }
             .padding(.horizontal, 14)
-            .padding(.top, 10)
+            .padding(.top, 12)
             .padding(.bottom, 8)
 
             Divider().overlay(Theme.hairline.opacity(0.12))
@@ -154,7 +155,7 @@ struct MenuBarContent: View {
                             if session.id != group.sessions.last?.id {
                                 Divider()
                                     .overlay(Theme.hairline.opacity(0.12))
-                                    .padding(.leading, 36)
+                                    .padding(.leading, 44)
                             }
                         }
                     }
@@ -164,7 +165,7 @@ struct MenuBarContent: View {
 
             Divider().overlay(Theme.hairline.opacity(0.12))
 
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Toggle(isOn: Binding(
                     get: { launchAtLogin },
                     set: { newValue in
@@ -175,7 +176,7 @@ struct MenuBarContent: View {
                 )) {
                     Text("LAUNCH AT LOGIN")
                         .font(Theme.eyebrowTiny)
-                        .tracking(1.2)
+                        .tracking(1.4)
                         .foregroundStyle(Theme.textSecondary)
                 }
                 .toggleStyle(.switch)
@@ -190,7 +191,7 @@ struct MenuBarContent: View {
                 )) {
                     Text("MASCOT")
                         .font(Theme.eyebrowTiny)
-                        .tracking(1.2)
+                        .tracking(1.4)
                         .foregroundStyle(Theme.textSecondary)
                 }
                 .toggleStyle(.switch)
@@ -205,7 +206,7 @@ struct MenuBarContent: View {
                     .keyboardShortcut("q")
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
         }
         .task {
             // Re-sync the toggle with the system state on each popover open.
@@ -242,52 +243,64 @@ private struct SessionRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            Spacer()
-            // StarButton and CopyButton already provide their own
-            // .accessibilityLabel internally, so none is added here.
-            StarButton(sessionId: session.id)
-            CopyButton(
-                text: TerminalLauncher.resumeCommand(profile: session.profile, sessionId: session.id, cwd: session.cwd),
-                help: "Copy resume command",
-                icon: "terminal"
-            )
-            CopyButton(
-                text: TerminalLauncher.resumeURL(profile: session.profile, sessionId: session.id, cwd: session.cwd),
-                help: "Copy AgentWatch link (click to resume in terminal)",
-                icon: "link"
-            )
-            Button {
-                TerminalLauncher.resumeSession(profile: session.profile, sessionId: session.id, cwd: session.cwd)
-            } label: {
-                Image(systemName: "play.circle")
-                    .font(.body.weight(.semibold))
+            // Give the text block priority so the action cluster keeps its
+            // fixed footprint and is never clipped; the title/subtitle truncate.
+            .layoutPriority(1)
+            Spacer(minLength: 8)
+            // Trailing action cluster — uniform 12pt icons in 22×22 hit targets,
+            // 8pt apart, vertically centered. StarButton and CopyButton already
+            // provide their own .accessibilityLabel internally.
+            HStack(spacing: 8) {
+                StarButton(sessionId: session.id)
+                    .frame(width: 22, height: 22)
+                CopyButton(
+                    text: TerminalLauncher.resumeCommand(profile: session.profile, sessionId: session.id, cwd: session.cwd),
+                    help: "Copy resume command",
+                    icon: "terminal"
+                )
+                CopyButton(
+                    text: TerminalLauncher.resumeURL(profile: session.profile, sessionId: session.id, cwd: session.cwd),
+                    help: "Copy AgentWatch link (click to resume in terminal)",
+                    icon: "link"
+                )
+                Button {
+                    TerminalLauncher.resumeSession(profile: session.profile, sessionId: session.id, cwd: session.cwd)
+                } label: {
+                    Image(systemName: "play.circle")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Open a new Terminal and run: claude --resume \(session.id)")
+                .accessibilityLabel("Resume session in new Terminal")
+                Button {
+                    TerminalLauncher.bringToFront(pid: session.pid, fallbackCwd: session.cwd)
+                } label: {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Bring this session's terminal to front")
+                .accessibilityLabel("Bring terminal to front")
+                Button {
+                    confirmingKill = true
+                } label: {
+                    Image(systemName: "stop.circle")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.danger)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Kill this session (terminate PID \(session.pid))")
+                // Spell out the destructive nature in the label since AppKit exposes
+                // no dedicated "destructive" accessibility trait for a plain button.
+                .accessibilityLabel("Kill session (destructive)")
             }
-            .buttonStyle(.secondary)
-            .help("Open a new Terminal and run: claude --resume \(session.id)")
-            .accessibilityLabel("Resume session in new Terminal")
-            Button {
-                TerminalLauncher.bringToFront(pid: session.pid, fallbackCwd: session.cwd)
-            } label: {
-                Image(systemName: "arrow.up.right.square")
-                    .font(.body.weight(.semibold))
-            }
-            .buttonStyle(.secondary)
-            .help("Bring this session's terminal to front")
-            .accessibilityLabel("Bring terminal to front")
-            Button {
-                confirmingKill = true
-            } label: {
-                Image(systemName: "stop.circle")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Theme.danger)
-            }
-            .buttonStyle(.plain)
-            .help("Kill this session (terminate PID \(session.pid))")
-            // Spell out the destructive nature in the label since AppKit exposes
-            // no dedicated "destructive" accessibility trait for a plain button.
-            .accessibilityLabel("Kill session (destructive)")
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)

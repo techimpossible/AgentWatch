@@ -19,6 +19,9 @@ final class ApprovalPanelController {
     }
 
     private func update() {
+        // On a notched Mac the notch renders approvals inline (seamless); the
+        // floating panel is only a fallback for displays without a notch.
+        guard NSScreen.notchedScreen() == nil else { panel?.orderOut(nil); return }
         if broker.current != nil {
             let p = panel ?? makePanel()
             panel = p

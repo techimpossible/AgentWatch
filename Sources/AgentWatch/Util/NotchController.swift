@@ -58,7 +58,10 @@ final class NotchController {
         w.ignoresMouseEvents = false
         w.isMovable = false
         w.isReleasedWhenClosed = false
-        w.contentView = NSHostingView(
+        // acceptsFirstMouse so clicks (approval buttons, tap-to-expand) reach the
+        // SwiftUI content even though this borderless overlay never becomes key —
+        // otherwise macOS swallows the mouse-down just to (fail to) activate it.
+        w.contentView = FirstMouseHostingView(
             rootView: NotchView()
                 .environment(state)
                 .environment(uiState)
@@ -110,6 +113,12 @@ final class NotchController {
         window.setFrame(frame, display: true, animate: true)
     }
 
+}
+
+/// Hosting view that accepts the first click while the notch window is not key,
+/// so approval buttons (and tap-to-expand) fire without the overlay stealing focus.
+private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 // MARK: - Notch detection

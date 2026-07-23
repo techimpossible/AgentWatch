@@ -14,6 +14,7 @@ final class NotchUIState {
         case collapsed
         case preview(rows: Int)
         case active
+        case approval        // a pending tool-permission request; overrides the rest
     }
 
     var stage: Stage = .collapsed
@@ -27,6 +28,7 @@ final class NotchUIState {
     static let expandedWidth: CGFloat   = 440
     static let previewHeightBase: CGFloat = 110
     static let activeHeight: CGFloat    = 510
+    static let approvalHeight: CGFloat  = 320   // header + diff + action row, below the camera
 
     var currentSize: CGSize {
         switch stage {
@@ -37,6 +39,8 @@ final class NotchUIState {
             return CGSize(width: Self.expandedWidth, height: h)
         case .active:
             return CGSize(width: Self.expandedWidth, height: activeDesiredHeight)
+        case .approval:
+            return CGSize(width: Self.expandedWidth, height: Self.approvalHeight)
         }
     }
 }

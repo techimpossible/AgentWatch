@@ -28,13 +28,19 @@ struct NotchView: View {
     /// preview (mates with the physical notch), but a fully rounded rectangle
     /// when the big panel is unfolded so the glow wraps all the way around.
     private var panelShape: AnyShape {
-        if case .active = stage {
+        switch stage {
+        case .active, .approval:
             return AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        default:
+            return AnyShape(NotchShape(cornerRadius: cornerRadius))
         }
-        return AnyShape(NotchShape(cornerRadius: cornerRadius))
     }
 
+    /// The pending tool-permission request, if any — drives the approval stage.
+    private var approval: ApprovalRequest? { ApprovalBroker.shared.current }
+
     private var stage: NotchUIState.Stage {
+        if approval != nil { return .approval }   // demands attention; overrides hover/click
         if sticky { return .active }
         if hovering { return .preview(rows: max(1, state.sessions.count)) }
         return .collapsed
@@ -45,6 +51,7 @@ struct NotchView: View {
         case .collapsed: return 14
         case .preview:   return 20
         case .active:    return 26
+        case .approval:  return 26
         }
     }
 
@@ -84,14 +91,17 @@ struct NotchView: View {
                 expandedContent.padding(.horizontal, 16).padding(.vertical, 12)
             case .active:
                 activePanel
+            case .approval:
+                approvalContent
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(panelShape)
         .onHover { newValue in
-            if !sticky { hovering = newValue }
+            if !sticky && approval == nil { hovering = newValue }
         }
         .onTapGesture {
+            guard approval == nil else { return }   // during approval, taps go to the action buttons
             sticky.toggle()
             if sticky { hovering = true }
         }
@@ -203,6 +213,87 @@ struct NotchView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Approval (pending tool-permission request, rendered in the notch)
+
+    @ViewBuilder private var approvalContent: some View {
+        if let req = approval {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 7) {
+                    Image(systemName: "hand.raised.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.dpGold)
+                    Text("PERMISSION")
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .tracking(1.3)
+                        .foregroundStyle(Theme.dpChrome.opacity(0.85))
+                    Spacer()
+                    if let prof = approvalProfile(req) {
+                        Text(prof.uppercased())
+                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(Capsule().fill(Color.black.opacity(0.55))
+                                .overlay(Capsule().strokeBorder(Theme.profileColor(prof).opacity(0.8), lineWidth: 1)))
+                    }
+                    if ApprovalBroker.shared.pending.count > 1 {
+                        Text("+\(ApprovalBroker.shared.pending.count - 1)")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Theme.dpChrome.opacity(0.6))
+                    }
+                }
+
+                Text(req.headline)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+
+                ScrollView(.vertical) {
+                    Text(req.detail.isEmpty ? "(no details)" : req.detail)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Theme.dpChrome.opacity(0.9))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(9)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
+
+                HStack(spacing: 8) {
+                    approvalButton("Deny", tint: .red) {
+                        ApprovalBroker.shared.resolve(req, decision: "deny")
+                    }
+                    approvalButton("Ask in terminal", tint: Theme.dpChrome.opacity(0.35)) {
+                        ApprovalBroker.shared.resolve(req, decision: "ask")
+                    }
+                    Spacer()
+                    approvalButton("Allow", tint: Theme.neonCyan) {
+                        ApprovalBroker.shared.resolve(req, decision: "allow")
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, menuBarInset + 8)   // clear the camera housing
+            .padding(.bottom, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+    }
+
+    /// A tap-gesture "button" (not SwiftUI Button) so it works inside the notch's
+    /// non-key borderless window, matching how the notch already handles taps.
+    private func approvalButton(_ label: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Text(label)
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 13).padding(.vertical, 7)
+            .background(Capsule().fill(tint.opacity(0.9)))
+            .contentShape(Capsule())
+            .onTapGesture(perform: action)
+    }
+
+    private func approvalProfile(_ req: ApprovalRequest) -> String? {
+        state.sessions.first { $0.sessionId == req.sessionId }?.profile
     }
 
     private func notchRow(session: Session) -> some View {

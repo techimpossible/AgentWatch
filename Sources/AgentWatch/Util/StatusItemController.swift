@@ -197,7 +197,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
             mi.target = self
             mi.representedObject = item.id
             mi.state = (selected == item.id) ? .on : .off
-            if case .image(let url) = item.source, let img = NSImage(contentsOf: url) {
+            if case .image(let urls) = item.source, let url = urls.first, let img = NSImage(contentsOf: url) {
                 let thumb = NSImage(size: NSSize(width: 18, height: 18))
                 thumb.lockFocus()
                 img.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))

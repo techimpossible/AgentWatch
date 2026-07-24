@@ -193,81 +193,87 @@ struct MascotView: View {
 
     // MARK: - Dance timing (multi-frame image mascots)
 
-    private let beatInterval: Double = 0.55        // dance tempo — seconds per pose
-    private let moonwalkHold: Double = 2.2         // the last frame holds this many beats
-    private let moonwalkSlideDistance: CGFloat = 170  // backward glide during the hold
+    private let beatInterval: Double = 0.55           // dance tempo — seconds per pose
+    private let moonwalkDuration: Double = 1.8        // one mid-crossing moonwalk interlude
+    private let moonwalkSlideDistance: CGFloat = 140  // backward glide during the interlude
+    private let moonwalkStartFraction: Double = 0.45  // where in the crossing it happens
 
-    /// Per-frame durations. 3+ frames = a dance whose LAST frame is the moonwalk:
-    /// held longer (and, while walking, gliding backward). 2 frames = plain
-    /// even-cadence walk cycle.
-    private func danceSchedule(_ n: Int) -> [Double] {
-        var d = Array(repeating: beatInterval, count: max(n, 1))
-        if n >= 3 { d[n - 1] = beatInterval * moonwalkHold }
-        return d
+    /// When the single moonwalk interlude begins (walk mode, 3+ frames).
+    private var moonwalkStart: Double { walkDuration * moonwalkStartFraction }
+
+    /// How much of the interlude has elapsed by time t (0…moonwalkDuration).
+    private func moonwalkOverlap(_ elapsed: Double) -> Double {
+        min(max(elapsed - moonwalkStart, 0), moonwalkDuration)
     }
 
-    /// Current frame, the next frame, and the crossfade amount into it (0…1,
-    /// ramping through the last quarter of each pose) — pure function of time.
-    private func danceFrame(elapsed: Double, count: Int) -> (cur: Int, next: Int, fade: CGFloat) {
-        let durs = danceSchedule(count)
-        let cycle = durs.reduce(0, +)
-        var t = elapsed.truncatingRemainder(dividingBy: cycle)
-        for (i, d) in durs.enumerated() {
-            if t < d {
-                let f = t / d
-                let raw = f > 0.75 ? CGFloat((f - 0.75) / 0.25) : 0
-                return (i, (i + 1) % count, raw * raw * (3 - 2 * raw))  // smoothstep
-            }
-            t -= d
-        }
-        return (count - 1, 0, 0)
+    /// 0…1 opacity blend into the moonwalk frame, smoothstepped over 0.3s edges.
+    private func moonwalkBlend(_ elapsed: Double) -> CGFloat {
+        let u = elapsed - moonwalkStart
+        guard u > 0, u < moonwalkDuration else { return 0 }
+        let e = min(min(u, moonwalkDuration - u) / 0.3, 1)
+        return CGFloat(e * e * (3 - 2 * e))
     }
 
-    /// Image persona. Multi-frame mascots dance: frames crossfade into each
-    /// other on the beat, a continuous sine groove rocks the whole body, and
-    /// (3+ frames, walking) the final moonwalk frame glides backward via
-    /// `danceX`. Single-frame ones keep the gentle waddle.
+    /// Current pose, next pose, and the crossfade amount into it (0…1, ramping
+    /// through the last quarter of each beat) — pure function of the pose clock.
+    private func danceFrame(clock: Double, poses: Int) -> (cur: Int, next: Int, fade: CGFloat) {
+        let t = clock.truncatingRemainder(dividingBy: beatInterval * Double(poses))
+        let i = min(Int(t / beatInterval), poses - 1)
+        let f = (t - Double(i) * beatInterval) / beatInterval
+        let raw = f > 0.75 ? CGFloat((f - 0.75) / 0.25) : 0
+        return (i, (i + 1) % poses, raw * raw * (3 - 2 * raw))  // smoothstep
+    }
+
+    /// Image persona. Multi-frame mascots dance-stroll: poses crossfade on the
+    /// beat while a continuous sine groove rocks the body. With 3+ frames in
+    /// walk mode, the LAST frame is the moonwalk — shown once, mid-crossing,
+    /// while `danceX` glides backward; the pose clock pauses underneath it and
+    /// the groove flattens so the glide reads as one smooth move. Single-frame
+    /// mascots keep the gentle waddle.
     private func imageBody(_ frames: [NSImage], now: Date) -> some View {
         let elapsed = now.timeIntervalSince(appearDate)
         let animated = frames.count > 1
+        let hasMoonwalk = mode == .walk && frames.count >= 3
+        let poses = hasMoonwalk ? frames.count - 1 : frames.count
+        // Pose clock pauses while the moonwalk interlude plays.
+        let clock = hasMoonwalk ? elapsed - moonwalkOverlap(elapsed) : elapsed
         let (cur, next, fade) = animated
-            ? danceFrame(elapsed: elapsed, count: frames.count)
+            ? danceFrame(clock: clock, poses: poses)
             : (0, 0, 0)
-        let sway = animated ? sin(elapsed * .pi / beatInterval) : 0  // one full sway per two beats
+        let moon = hasMoonwalk ? moonwalkBlend(elapsed) : 0
+        // Groove flattens during the glide; lean back slightly instead.
+        let sway = animated ? sin(clock * .pi / beatInterval) * Double(1 - moon) : 0
         return ZStack {
             Image(nsImage: frames[cur]).resizable().scaledToFit()
-                .opacity(Double(1 - fade))
+                .opacity(Double((1 - fade) * (1 - moon)))
             Image(nsImage: frames[next]).resizable().scaledToFit()
-                .opacity(Double(fade))
+                .opacity(Double(fade * (1 - moon)))
+            if hasMoonwalk {
+                Image(nsImage: frames[frames.count - 1]).resizable().scaledToFit()
+                    .opacity(Double(moon))
+            }
         }
         .frame(width: imageSize, height: imageSize)
-        .rotationEffect(.degrees(animated ? sway * 5 : (stride ? 3 : -3)), anchor: .bottom)
+        .rotationEffect(.degrees(animated ? sway * 5 - Double(moon) * 4 : (stride ? 3 : -3)),
+                        anchor: .bottom)
         .scaleEffect(x: 1 + abs(sway) * 0.03, y: 1 - abs(sway) * 0.05, anchor: .bottom)
         .offset(y: -abs(sway) * 4)
         .shadow(color: reason.tint.opacity(0.30), radius: 12)
     }
 
-    /// Horizontal dance travel: scoots forward during the pose beats, then
-    /// glides BACKWARD through the moonwalk hold. The forward speed is solved
-    /// so the crossing still completes in `walkDuration`. Pure function of time.
+    /// Horizontal dance travel: a steady stroll across the screen with ONE
+    /// moonwalk interlude mid-crossing — forward motion eases out, the mascot
+    /// glides smoothly backward, then the stroll resumes. Forward speed is
+    /// solved so the crossing still completes in `walkDuration`.
     private func danceX(elapsed: Double, frames: Int) -> CGFloat {
-        let durs = danceSchedule(frames)
-        let cycle = durs.reduce(0, +)
-        let moon = durs[frames - 1]
-        let fwdPerCycle = cycle - moon
         let span = travel + charWidth
-        let cycles = walkDuration / cycle
-        let v = (span + CGFloat(cycles) * moonwalkSlideDistance) / CGFloat(cycles * fwdPerCycle)
-        let s = moonwalkSlideDistance / CGFloat(moon)
-        let full = Int(elapsed / cycle)
-        let inCycle = elapsed - Double(full) * cycle
-        var x = CGFloat(full) * (v * CGFloat(fwdPerCycle) - moonwalkSlideDistance)
-        if inCycle < fwdPerCycle {
-            x += v * CGFloat(inCycle)
-        } else {
-            x += v * CGFloat(fwdPerCycle) - s * CGFloat(inCycle - fwdPerCycle)
-        }
-        return -charWidth + x
+        // Steady speed covering the span plus the backslide, minus glide time.
+        let v = (span + moonwalkSlideDistance) / CGFloat(walkDuration - moonwalkDuration)
+        let u = moonwalkOverlap(elapsed)                    // 0…moonwalkDuration
+        let p = u / moonwalkDuration                        // glide progress 0…1
+        let glide = CGFloat(p * p * (3 - 2 * p))            // smoothstep: ease out + back in
+        let forward = v * CGFloat(elapsed - u)              // stroll pauses during the glide
+        return -charWidth + forward - moonwalkSlideDistance * glide
     }
 
     /// Boxy robot: square eyes, a straight mouth, and a little antenna.

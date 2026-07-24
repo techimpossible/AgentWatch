@@ -11,6 +11,24 @@ struct HistoricalSession: Identifiable, Hashable {
     let fileURL: URL
 
     var id: String { sessionId }
+
+    /// Row identity: the first user prompt (what makes a session recognizable),
+    /// falling back to the project folder for empty/nameless sessions. For a
+    /// currently-running session the view prefers the live session's displayTitle
+    /// (which also picks up an explicit `claude --name`).
+    var displayName: String {
+        if let m = firstMessage, !m.isEmpty { return m }
+        return projectName
+    }
+
+    /// "~"-relative working directory for the context line (nil if unknown).
+    var relativeCwd: String? {
+        guard let cwd, !cwd.isEmpty else { return nil }
+        let home = NSString(string: "~").expandingTildeInPath
+        if cwd == home { return "~" }
+        if cwd.hasPrefix(home + "/") { return "~" + cwd.dropFirst(home.count) }
+        return cwd
+    }
 }
 
 enum HistoryCatalog {

@@ -8,16 +8,18 @@ enum DrawnKind: String, CaseIterable {
 }
 
 /// One appearance of a mascot: a drawn character or a loaded image.
+/// Image personas carry 1+ frames; multi-frame ones flip through them as a
+/// walk cycle (see MascotView.frameLoop).
 enum MascotPersona {
     case drawn(DrawnKind)
-    case image(NSImage)
+    case image([NSImage])
 }
 
 /// A selectable entry in the mascot picker.
 struct MascotItem: Identifiable {
     enum Source {
         case drawn(DrawnKind)
-        case image(URL)
+        case image([URL])   // 1+ frame URLs, in animation order
     }
     let id: String        // "drawn:sponge" | "img:penguin"
     let name: String      // "Sponge" | "Penguin"
@@ -56,20 +58,46 @@ final class MascotCatalog {
         set { defaults.set(newValue ?? "", forKey: selectionKey) }
     }
 
+    /// Splits "name-3" into ("name", 3); nil frame for un-suffixed files.
+    /// Frame suffixes group `foo-1.png`, `foo-2.png`, … into one animated mascot.
+    private func frameParts(_ base: String) -> (stem: String, frame: Int?) {
+        guard let dash = base.lastIndex(of: "-"),
+              let n = Int(base[base.index(after: dash)...]), n >= 1, n <= 99 else {
+            return (base, nil)
+        }
+        return (String(base[..<dash]), n)
+    }
+
     /// All available mascots, in display order: drawn built-ins, then bundled
     /// images, then user-uploaded images. De-duplicated by id (bundle wins).
+    /// `foo-1.png`/`foo-2.png`… group into a single multi-frame "Foo".
     func items() -> [MascotItem] {
         var out: [MascotItem] = DrawnKind.allCases.map {
             MascotItem(id: "drawn:\($0.rawValue)", name: $0.displayName, source: .drawn($0))
         }
         var seen = Set<String>()
         func addImages(_ urls: [URL]) {
-            for url in urls.sorted(by: { $0.lastPathComponent.lowercased() < $1.lastPathComponent.lowercased() }) {
+            // Group by stem so frame sequences become one item.
+            var groups: [String: [(frame: Int, url: URL)]] = [:]
+            var singles: [(stem: String, url: URL)] = []
+            for url in urls {
                 let base = url.deletingPathExtension().lastPathComponent
-                let id = "img:\(base.lowercased())"
+                let (stem, frame) = frameParts(base)
+                if let frame {
+                    groups[stem.lowercased(), default: []].append((frame, url))
+                } else {
+                    singles.append((base, url))
+                }
+            }
+            // A "-1" file with no siblings is still a 1-frame mascot under its stem.
+            var entries: [(stem: String, urls: [URL])] =
+                groups.map { ($0.key, $0.value.sorted { $0.frame < $1.frame }.map(\.url)) }
+            entries += singles.map { ($0.stem, [$0.url]) }
+            for (stem, frameURLs) in entries.sorted(by: { $0.stem.lowercased() < $1.stem.lowercased() }) {
+                let id = "img:\(stem.lowercased())"
                 guard !seen.contains(id) else { continue }
                 seen.insert(id)
-                out.append(MascotItem(id: id, name: base.capitalized, source: .image(url)))
+                out.append(MascotItem(id: id, name: stem.capitalized, source: .image(frameURLs)))
             }
         }
         addImages(Bundle.main.urls(forResourcesWithExtension: "png", subdirectory: "Mascots") ?? [])
@@ -96,7 +124,11 @@ final class MascotCatalog {
     private func persona(for item: MascotItem) -> MascotPersona? {
         switch item.source {
         case .drawn(let k): return .drawn(k)
-        case .image(let url): return loadImage(url, id: item.id).map(MascotPersona.image)
+        case .image(let urls):
+            let frames = urls.enumerated().compactMap { i, url in
+                loadImage(url, id: "\(item.id)#\(i)")
+            }
+            return frames.isEmpty ? nil : .image(frames)
         }
     }
 

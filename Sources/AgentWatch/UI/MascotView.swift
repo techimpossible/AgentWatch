@@ -193,47 +193,29 @@ struct MascotView: View {
 
     // MARK: - Dance timing (multi-frame image mascots)
 
-    private let beatInterval: Double = 0.55        // dance tempo — seconds per pose
-    private let moonwalkHold: Double = 2.2         // the last frame holds this many beats
-    private let moonwalkSlideDistance: CGFloat = 170  // backward glide during the hold
+    private let beatInterval: Double = 0.55           // dance tempo — seconds per pose
 
-    /// Per-frame durations. 3+ frames = a dance whose LAST frame is the moonwalk:
-    /// held longer (and, while walking, gliding backward). 2 frames = plain
-    /// even-cadence walk cycle.
-    private func danceSchedule(_ n: Int) -> [Double] {
-        var d = Array(repeating: beatInterval, count: max(n, 1))
-        if n >= 3 { d[n - 1] = beatInterval * moonwalkHold }
-        return d
+    /// Current pose, next pose, and the crossfade amount into it (0…1, ramping
+    /// through the last quarter of each beat) — pure function of the pose clock.
+    private func danceFrame(clock: Double, poses: Int) -> (cur: Int, next: Int, fade: CGFloat) {
+        let t = clock.truncatingRemainder(dividingBy: beatInterval * Double(poses))
+        let i = min(Int(t / beatInterval), poses - 1)
+        let f = (t - Double(i) * beatInterval) / beatInterval
+        let raw = f > 0.75 ? CGFloat((f - 0.75) / 0.25) : 0
+        return (i, (i + 1) % poses, raw * raw * (3 - 2 * raw))  // smoothstep
     }
 
-    /// Current frame, the next frame, and the crossfade amount into it (0…1,
-    /// ramping through the last quarter of each pose) — pure function of time.
-    private func danceFrame(elapsed: Double, count: Int) -> (cur: Int, next: Int, fade: CGFloat) {
-        let durs = danceSchedule(count)
-        let cycle = durs.reduce(0, +)
-        var t = elapsed.truncatingRemainder(dividingBy: cycle)
-        for (i, d) in durs.enumerated() {
-            if t < d {
-                let f = t / d
-                let raw = f > 0.75 ? CGFloat((f - 0.75) / 0.25) : 0
-                return (i, (i + 1) % count, raw * raw * (3 - 2 * raw))  // smoothstep
-            }
-            t -= d
-        }
-        return (count - 1, 0, 0)
-    }
-
-    /// Image persona. Multi-frame mascots dance: frames crossfade into each
-    /// other on the beat, a continuous sine groove rocks the whole body, and
-    /// (3+ frames, walking) the final moonwalk frame glides backward via
-    /// `danceX`. Single-frame ones keep the gentle waddle.
+    /// Image persona. Multi-frame mascots dance-stroll: all poses (moonwalk
+    /// included, as just another beat) crossfade on the beat while a continuous
+    /// sine groove rocks the body. Horizontal motion stays steady the whole
+    /// crossing — no positional tricks. Single-frame mascots keep the waddle.
     private func imageBody(_ frames: [NSImage], now: Date) -> some View {
         let elapsed = now.timeIntervalSince(appearDate)
         let animated = frames.count > 1
         let (cur, next, fade) = animated
-            ? danceFrame(elapsed: elapsed, count: frames.count)
+            ? danceFrame(clock: elapsed, poses: frames.count)
             : (0, 0, 0)
-        let sway = animated ? sin(elapsed * .pi / beatInterval) : 0  // one full sway per two beats
+        let sway = animated ? sin(elapsed * .pi / beatInterval) : 0
         return ZStack {
             Image(nsImage: frames[cur]).resizable().scaledToFit()
                 .opacity(Double(1 - fade))
@@ -245,29 +227,6 @@ struct MascotView: View {
         .scaleEffect(x: 1 + abs(sway) * 0.03, y: 1 - abs(sway) * 0.05, anchor: .bottom)
         .offset(y: -abs(sway) * 4)
         .shadow(color: reason.tint.opacity(0.30), radius: 12)
-    }
-
-    /// Horizontal dance travel: scoots forward during the pose beats, then
-    /// glides BACKWARD through the moonwalk hold. The forward speed is solved
-    /// so the crossing still completes in `walkDuration`. Pure function of time.
-    private func danceX(elapsed: Double, frames: Int) -> CGFloat {
-        let durs = danceSchedule(frames)
-        let cycle = durs.reduce(0, +)
-        let moon = durs[frames - 1]
-        let fwdPerCycle = cycle - moon
-        let span = travel + charWidth
-        let cycles = walkDuration / cycle
-        let v = (span + CGFloat(cycles) * moonwalkSlideDistance) / CGFloat(cycles * fwdPerCycle)
-        let s = moonwalkSlideDistance / CGFloat(moon)
-        let full = Int(elapsed / cycle)
-        let inCycle = elapsed - Double(full) * cycle
-        var x = CGFloat(full) * (v * CGFloat(fwdPerCycle) - moonwalkSlideDistance)
-        if inCycle < fwdPerCycle {
-            x += v * CGFloat(inCycle)
-        } else {
-            x += v * CGFloat(fwdPerCycle) - s * CGFloat(inCycle - fwdPerCycle)
-        }
-        return -charWidth + x
     }
 
     /// Boxy robot: square eyes, a straight mouth, and a little antenna.
@@ -461,9 +420,8 @@ struct MascotView: View {
 
     // MARK: - Motion
 
-    /// Horizontal position. For walking it's a pure function of elapsed time —
-    /// linear for drawn/single-image mascots, dance travel (forward scoots +
-    /// backward moonwalk glides) for multi-frame ones. Peek-a-boo is a fixed spot.
+    /// Horizontal position. For walking it's a pure function of elapsed time
+    /// (linear, left edge → off the right). For peek-a-boo it's a fixed spot.
     private func currentX(now: Date) -> CGFloat {
         if let frozenX { return frozenX }       // pinned once the user grabs it
         switch mode {
@@ -471,10 +429,7 @@ struct MascotView: View {
             return startX
         case .walk:
             guard let startDate else { return -charWidth }
-            let elapsed = min(now.timeIntervalSince(startDate), walkDuration)
-            if case .image(let frames) = persona, frames.count >= 3 {
-                return danceX(elapsed: elapsed, frames: frames.count)
-            }
+            let elapsed = now.timeIntervalSince(startDate)
             let p = min(1, max(0, elapsed / walkDuration))
             let start = -charWidth              // just off the left edge
             let end = travel                    // off the right edge

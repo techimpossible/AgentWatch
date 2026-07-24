@@ -124,7 +124,8 @@ struct HistoryView: View {
         if !q.isEmpty {
             let live = liveById
             result = result.filter {
-                $0.projectName.lowercased().contains(q)
+                $0.name?.lowercased().contains(q) == true
+                    || $0.projectName.lowercased().contains(q)
                     || $0.firstMessage?.lowercased().contains(q) == true
                     || $0.sessionId.lowercased().contains(q)
                     || live[$0.sessionId]?.displayTitle.lowercased().contains(q) == true
@@ -178,9 +179,9 @@ private struct HistoryRow: View {
     var live: Session? = nil
 
     private var isLive: Bool { live != nil }
-    /// Row identity: prefer the live session's title (picks up `claude --name`),
-    /// else the first prompt / project folder.
-    private var title: String { live?.displayTitle ?? session.displayName }
+    /// Row identity (bold first line): the session's own name (custom title /
+    /// agent title) wins; else the live title (running), else first prompt / folder.
+    private var title: String { session.name ?? live?.displayTitle ?? session.displayName }
     /// Show the prompt preview only when it isn't already the title.
     private var showPreview: Bool {
         guard let m = session.firstMessage, !m.isEmpty else { return false }

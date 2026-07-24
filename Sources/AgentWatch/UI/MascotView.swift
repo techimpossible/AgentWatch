@@ -91,6 +91,7 @@ struct MascotView: View {
     @State private var startX: CGFloat = 0        // fixed horizontal spot (peekaboo)
     @State private var stride: Bool = false       // alternates legs/arms (walk)
     @State private var frameIndex = 0             // current frame (multi-frame images)
+    @State private var groove: CGFloat = 0        // -1…1 dance sway, flips with each frame
     @State private var opacity: Double = 0
     @State private var bubbleShown = false
     @State private var jump: CGFloat = 0          // extra height during a random hop
@@ -192,28 +193,36 @@ struct MascotView: View {
         }
     }
 
-    /// Image persona. Multi-frame mascots step through their walk-cycle frames
-    /// (driven by `frameLoop` on the stride cadence) with a slight lean into the
-    /// direction of travel; single-frame ones keep the gentle waddle.
+    /// Image persona. Multi-frame mascots dance through their frames (driven by
+    /// `frameLoop` on the stride cadence) with a groove sway + bounce layered on
+    /// so poses flow into each other; single-frame ones keep the gentle waddle.
     private func imageBody(_ frames: [NSImage]) -> some View {
         let animated = frames.count > 1
         return Image(nsImage: frames[min(frameIndex, frames.count - 1)])
             .resizable().scaledToFit()
             .frame(width: imageSize, height: imageSize)
-            .rotationEffect(.degrees(animated ? (mode == .walk ? 2 : 0)
-                                              : (stride ? 3 : -3)),
+            .rotationEffect(.degrees(animated ? Double(groove) * 7 : (stride ? 3 : -3)),
                             anchor: .bottom)
+            .scaleEffect(x: 1 + abs(groove) * 0.04, y: 1 - abs(groove) * 0.06,
+                         anchor: .bottom)
+            .offset(y: -abs(groove) * 5)
             .shadow(color: reason.tint.opacity(0.30), radius: 12)
     }
 
-    /// Flip through walk-cycle frames while visible. Runs only for multi-frame
-    /// image personas; cadence matches the drawn characters' stride.
+    /// Step through dance frames while visible (multi-frame image personas
+    /// only), on the stride cadence. Each flip also swings the groove sway to
+    /// the other side so the whole body rocks with the beat.
     private func frameLoop() async {
         guard case .image(let frames) = persona, frames.count > 1 else { return }
+        var beat = false
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(stepInterval))
             if Task.isCancelled { return }
             frameIndex = (frameIndex + 1) % frames.count
+            beat.toggle()
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) {
+                groove = beat ? 1 : -1
+            }
         }
     }
 

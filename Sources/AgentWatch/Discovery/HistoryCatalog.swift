@@ -5,6 +5,7 @@ struct HistoricalSession: Identifiable, Hashable {
     let profile: String         // Claude config profile this session belongs to
     let projectName: String
     let cwd: String?            // best-effort: from the JSONL itself, may be nil
+    let name: String?           // session name: customTitle (rename) ?? agentName (auto-title)
     let firstMessage: String?   // first user message for a preview
     let lastModified: Date
     let messageCount: Int
@@ -12,11 +13,11 @@ struct HistoricalSession: Identifiable, Hashable {
 
     var id: String { sessionId }
 
-    /// Row identity: the first user prompt (what makes a session recognizable),
-    /// falling back to the project folder for empty/nameless sessions. For a
-    /// currently-running session the view prefers the live session's displayTitle
-    /// (which also picks up an explicit `claude --name`).
+    /// Row identity (bold first line): the session's name — its custom title, else
+    /// the auto-generated agent title — falling back to the first prompt, then the
+    /// project folder for empty/untitled sessions.
     var displayName: String {
+        if let n = name, !n.isEmpty { return n }
         if let m = firstMessage, !m.isEmpty { return m }
         return projectName
     }
@@ -74,14 +75,27 @@ enum HistoryCatalog {
         }
         var cwd: String?
         var firstMessage: String?
+        var customTitle: String?   // explicit `claude --name` / rename (last wins)
+        var agentName: String?     // auto-generated title (last wins)
         var lineCount = 0
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             lineCount += 1
-            // Once we have both, stop scanning content but keep counting lines? No — we already
-            // need the full count, so let JSONL processing happen lazily.
-            if cwd != nil && firstMessage != nil { continue }
-            guard let lineData = String(line).data(using: .utf8),
+            let ls = String(line)
+            // Title lines can appear (and change) anywhere, so always inspect them;
+            // otherwise only parse until we have cwd + first message, to stay cheap.
+            let mightBeTitle = ls.contains("\"custom-title\"") || ls.contains("\"agent-name\"")
+            let needMeta = (cwd == nil || firstMessage == nil)
+            if !mightBeTitle && !needMeta { continue }
+            guard let lineData = ls.data(using: .utf8),
                   let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
+            switch obj["type"] as? String {
+            case "custom-title":
+                if let t = obj["customTitle"] as? String, !t.isEmpty { customTitle = trimmed(t, max: 200) }
+            case "agent-name":
+                if let t = obj["agentName"] as? String, !t.isEmpty { agentName = trimmed(t, max: 200) }
+            default:
+                break
+            }
             if cwd == nil, let c = obj["cwd"] as? String, !c.isEmpty {
                 cwd = c
             }
@@ -106,6 +120,7 @@ enum HistoryCatalog {
             profile: profile,
             projectName: projectName,
             cwd: cwd,
+            name: customTitle ?? agentName,
             firstMessage: firstMessage,
             lastModified: mtime,
             messageCount: lineCount,
